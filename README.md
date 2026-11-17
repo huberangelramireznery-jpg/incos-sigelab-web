@@ -4,6 +4,8 @@
 
 Demo académico conforme al **Contrato de Conformidad v1.1.0** (núcleo SIA-INCOS en Railway). El SIGELAB no administra personas ni contraseñas: consume la identidad del SIA y guarda únicamente `persona_id`.
 
+> **Repositorio:** <https://github.com/huberangelramireznery-jpg/incos-sigelab-web>
+
 ---
 
 ## 1. Qué hace
@@ -203,9 +205,9 @@ La base de datos propia está **creada y operativa en Firebase Firestore**:
 
 | `DB_BACKEND` | Comportamiento |
 |---|---|
-| `firestore` (por defecto) | Firebase Firestore en la nube |
+| `auto` (por defecto) | Firestore si existe la clave; si no, archivo JSON |
+| `firestore` | Obliga a Firebase Firestore |
 | `file` | Archivo `data/store.json` (sin internet) |
-| `auto` | Firestore si hay credenciales; si no, archivo JSON |
 
 ### Colecciones (prefijo `sigelab_`)
 
