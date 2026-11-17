@@ -79,6 +79,9 @@ function montarNavegacion(activo) {
     '<span class="user-role">' + esc(cargo || permisos.rol || '') + '</span>' +
     '</div>' +
     '<button class="btn btn-ghost btn-sm" id="logoutBtn" type="button">Salir</button>' +
+    '<a class="topbar-logo" href="/index.html" title="INCOS-BENI" aria-label="Ir al inicio">' +
+    '<img src="/img/logo-sia.jpeg" alt="Logo INCOS-BENI" />' +
+    '</a>' +
     '</div>' +
     '</div>';
 
