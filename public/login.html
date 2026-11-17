@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ingreso · SIGELAB-INCOS</title>
-  <link rel="stylesheet" href="/css/app.css?v=4" />
+  <link rel="stylesheet" href="/css/app.css?v=5" />
 </head>
 <body>
   <div class="login-wrap">
@@ -18,7 +18,8 @@
           <p class="small" style="opacity:.9;margin-bottom:6px">✓ Registro de ambientes y equipos</p>
           <p class="small" style="opacity:.9;margin-bottom:6px">✓ Inventario con estados y filtros</p>
           <p class="small" style="opacity:.9;margin-bottom:6px">✓ Historial de cambios por equipo</p>
-          <p class="small" style="opacity:.9;margin-bottom:0">✓ Identidad centralizada en el SIA</p>
+          <p class="small" style="opacity:.9;margin-bottom:6px">✓ Identidad institucional centralizada en el SIA</p>
+          <p class="small" style="opacity:.9;margin-bottom:0">✓ Cuentas SIGELAB con código por Gmail y WhatsApp</p>
         </div>
       </div>
       <div class="small" style="opacity:.85">
@@ -30,34 +31,69 @@
     <section class="login-panel">
       <div class="login-card">
         <h2>Iniciar sesión</h2>
-        <p class="lead">Ingrese con su cédula o correo institucional. La contraseña la valida el núcleo SIA.</p>
+        <p class="lead">Elija el tipo de cuenta con la que desea ingresar.</p>
 
-        <div id="loginError"></div>
+        <div class="auth-tabs" role="tablist" aria-label="Tipo de cuenta">
+          <button class="auth-tab is-active" id="tabSia" type="button" role="tab" aria-selected="true" data-panel="sia">Cuenta SIA</button>
+          <button class="auth-tab" id="tabLocal" type="button" role="tab" aria-selected="false" data-panel="local">Cuenta SIGELAB</button>
+        </div>
 
-        <form id="loginForm" autocomplete="on">
-          <div class="field">
-            <label for="identificador">Cédula o correo</label>
-            <input class="form-control" id="identificador" name="identificador" type="text" placeholder="Ej. 9000006" autocomplete="username" required />
+        <div class="auth-panel is-active" id="panel-sia" role="tabpanel" aria-labelledby="tabSia">
+          <p class="auth-note">Ingrese con su cédula o correo institucional. La contraseña la valida el núcleo SIA.</p>
+
+          <div id="loginError"></div>
+
+          <form id="loginForm" autocomplete="on">
+            <div class="field">
+              <label for="identificador">Cédula o correo</label>
+              <input class="form-control" id="identificador" name="identificador" type="text" placeholder="Ej. 9000006" autocomplete="username" required />
+            </div>
+            <div class="field">
+              <label for="clave">Contraseña</label>
+              <input class="form-control" id="clave" name="clave" type="password" placeholder="Contraseña" autocomplete="current-password" required />
+            </div>
+            <button class="btn btn-primary btn-block" id="btnIngresar" type="submit">Ingresar con SIA</button>
+          </form>
+
+          <details class="demo-accounts">
+            <summary>Cuentas de demostración SIA</summary>
+            <div class="demo-list" id="demoList"></div>
+            <p class="hint">Contraseña única: <strong>Demo2026*</strong>. Datos ficticios del Anexo B.</p>
+          </details>
+        </div>
+
+        <div class="auth-panel" id="panel-local" role="tabpanel" aria-labelledby="tabLocal">
+          <p class="auth-note">Ingrese con su correo Gmail o teléfono registrado en SIGELAB.</p>
+
+          <div id="loginLocalError"></div>
+
+          <form id="loginLocalForm" autocomplete="on">
+            <div class="field">
+              <label for="localIdentificador">Correo Gmail o teléfono</label>
+              <input class="form-control" id="localIdentificador" name="localIdentificador" type="text" placeholder="ejemplo@gmail.com o +591 71234567" autocomplete="username" required />
+            </div>
+            <div class="field">
+              <label for="localClave">Contraseña</label>
+              <input class="form-control" id="localClave" name="localClave" type="password" placeholder="Contraseña" autocomplete="current-password" required />
+            </div>
+            <button class="btn btn-primary btn-block" id="btnLocalIngresar" type="submit">Ingresar con SIGELAB</button>
+          </form>
+
+          <div class="auth-links">
+            <a href="/recuperar.html">¿Olvidaste tu contraseña?</a>
+            <span class="auth-sep">·</span>
+            <a href="/registro.html">Crear cuenta</a>
           </div>
-          <div class="field">
-            <label for="clave">Contraseña</label>
-            <input class="form-control" id="clave" name="clave" type="password" placeholder="Contraseña" autocomplete="current-password" required />
-          </div>
-          <button class="btn btn-primary btn-block" id="btnIngresar" type="submit">Ingresar</button>
-        </form>
 
-        <details class="demo-accounts">
-          <summary>Cuentas de demostración</summary>
-          <div class="demo-list" id="demoList"></div>
-          <p class="hint">Contraseña única: <strong>Demo2026*</strong>. Datos ficticios del Anexo B.</p>
-        </details>
+          <div id="authModo" class="mt-2"></div>
+        </div>
 
         <p class="login-foot">SIGELAB-INCOS · Demo conforme al Contrato de Conformidad v1.1.0</p>
       </div>
     </section>
   </div>
 
-  <script src="/js/api.js?v=4"></script>
+  <script src="/js/api.js?v=5"></script>
   <script>
     (function () {
       const CUENTAS = [
@@ -82,14 +118,63 @@
         document.getElementById('clave').focus();
       });
 
+      // ----------------------------------------------------------
+      // Pestañas SIA / cuenta local
+      // ----------------------------------------------------------
+      const tabs = Array.prototype.slice.call(document.querySelectorAll('.auth-tab'));
+      const paneles = {
+        sia: document.getElementById('panel-sia'),
+        local: document.getElementById('panel-local')
+      };
+
+      function activarPanel(nombre) {
+        tabs.forEach(function (tab) {
+          const activo = tab.getAttribute('data-panel') === nombre;
+          tab.classList.toggle('is-active', activo);
+          tab.setAttribute('aria-selected', activo ? 'true' : 'false');
+        });
+        Object.keys(paneles).forEach(function (clave) {
+          paneles[clave].classList.toggle('is-active', clave === nombre);
+        });
+        if (nombre === 'local') {
+          const input = document.getElementById('localIdentificador');
+          if (input) input.focus();
+        }
+      }
+
+      tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          activarPanel(tab.getAttribute('data-panel'));
+        });
+      });
+
+      if (location.hash === '#local') activarPanel('local');
+
+      // ----------------------------------------------------------
+      // Configuracion publica
+      // ----------------------------------------------------------
       API.pedir('/api/auth/config')
         .then(function (cfg) {
           document.getElementById('siaUrl').textContent = cfg.siaUrl || '—';
+          const modo = document.getElementById('authModo');
+          if (cfg.demoCodigos) {
+            modo.innerHTML = '<div class="alert alert-info" style="margin:0">Modo demostración: el código de 4 dígitos se muestra en pantalla y en la consola del servidor.</div>';
+          } else {
+            const canales = [];
+            if (cfg.smtpConfigurado) canales.push('correo');
+            if (cfg.whatsappConfigurado) canales.push('WhatsApp');
+            modo.innerHTML = canales.length
+              ? '<div class="alert alert-ok" style="margin:0">Los códigos se envían por ' + canales.join(' y ') + '.</div>'
+              : '<div class="alert alert-warn" style="margin:0">El envío real aún no está configurado. Contacte al administrador.</div>';
+          }
         })
         .catch(function () {
           document.getElementById('siaUrl').textContent = 'no disponible';
         });
 
+      // ----------------------------------------------------------
+      // Login SIA
+      // ----------------------------------------------------------
       const MENSAJES = {
         NO_AUTENTICADO: 'Cédula/correo o contraseña incorrectos.',
         SIN_PERMISO: 'Esta cuenta no tiene acceso al sistema SIGELAB.',
@@ -139,7 +224,50 @@
             '</div>';
         } finally {
           boton.disabled = false;
-          boton.textContent = 'Ingresar';
+          boton.textContent = 'Ingresar con SIA';
+        }
+      });
+
+      // ----------------------------------------------------------
+      // Login local SIGELAB
+      // ----------------------------------------------------------
+      document.getElementById('loginLocalForm').addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        const errorBox = document.getElementById('loginLocalError');
+        errorBox.innerHTML = '';
+        const boton = document.getElementById('btnLocalIngresar');
+        const identificador = document.getElementById('localIdentificador').value.trim();
+        const clave = document.getElementById('localClave').value;
+
+        if (!identificador || !clave) {
+          errorBox.innerHTML = '<div class="alert alert-danger">Complete su correo/teléfono y su contraseña.</div>';
+          return;
+        }
+
+        boton.disabled = true;
+        boton.textContent = 'Ingresando…';
+
+        try {
+          const res = await fetch('/api/auth/login-local', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identificador: identificador, clave: clave })
+          });
+          const json = await res.json().catch(function () { return null; });
+
+          if (!res.ok || !json || json.exito === false) {
+            const mensaje = (json && json.error && json.error.mensaje) || 'No fue posible iniciar sesión.';
+            errorBox.innerHTML = '<div class="alert alert-danger">' + mensaje + '</div>';
+            return;
+          }
+
+          API.guardar(json.datos);
+          location.replace('/index.html');
+        } catch (e) {
+          errorBox.innerHTML = '<div class="alert alert-danger">No se pudo conectar con el servidor del demo.</div>';
+        } finally {
+          boton.disabled = false;
+          boton.textContent = 'Ingresar con SIGELAB';
         }
       });
     })();

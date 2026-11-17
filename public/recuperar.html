@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Recuperar contraseña · SIGELAB-INCOS</title>
+  <link rel="stylesheet" href="/css/app.css?v=5" />
+</head>
+<body>
+  <div class="login-wrap">
+    <img class="login-page-logo" src="/img/logo-sia.jpeg" alt="Logo INCOS-BENI" />
+    <section class="login-brand">
+      <div>
+        <span class="pill"><span class="dot" style="width:9px;height:9px;border-radius:50%;background:#5eead4;display:inline-block"></span> Ecosistema INCOS-BENI</span>
+        <h1>Recuperar contraseña</h1>
+        <p>Le enviaremos un código de 4 dígitos a su correo de Google o a su WhatsApp para que pueda crear una nueva contraseña.</p>
+        <div class="mt-3">
+          <p class="small" style="opacity:.9;margin-bottom:6px">✓ Código por Gmail</p>
+          <p class="small" style="opacity:.9;margin-bottom:6px">✓ Código por WhatsApp</p>
+          <p class="small" style="opacity:.9;margin-bottom:6px">✓ El código vence en 10 minutos</p>
+          <p class="small" style="opacity:.9;margin-bottom:0">✓ Solo para cuentas SIGELAB</p>
+        </div>
+      </div>
+      <div class="small" style="opacity:.85">
+        <div>¿No tiene cuenta? <a href="/registro.html" style="color:#d7f5f1;font-weight:700">Crear cuenta</a></div>
+        <div class="mt-1"><a href="/login.html" style="color:#d7f5f1">Volver a iniciar sesión</a></div>
+      </div>
+    </section>
+
+    <section class="login-panel">
+      <div class="login-card wide">
+        <span class="auth-badge">Cuenta SIGELAB</span>
+        <h2>¿Olvidaste tu contraseña?</h2>
+        <p class="lead">Ingrese su correo Gmail o su teléfono y elija por dónde quiere recibir el código.</p>
+
+        <div id="recuperarAlerta"></div>
+
+        <div class="auth-steps" aria-label="Pasos de recuperación">
+          <span class="auth-step is-active" id="rstep1">1. Solicitar</span>
+          <span class="auth-step" id="rstep2">2. Código</span>
+          <span class="auth-step" id="rstep3">3. Listo</span>
+        </div>
+
+        <form id="solicitarForm" autocomplete="on">
+          <div class="field">
+            <label for="identificador">Correo Gmail o teléfono</label>
+            <input class="form-control" id="identificador" name="identificador" type="text" placeholder="ejemplo@gmail.com o +591 71234567" autocomplete="username" required />
+          </div>
+
+          <div class="field">
+            <label for="canal">Recibir el código por</label>
+            <select class="form-select" id="canal" name="canal">
+              <option value="EMAIL">Correo Gmail</option>
+              <option value="WHATSAPP">WhatsApp</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary btn-block" id="btnSolicitar" type="submit">Enviar código de recuperación</button>
+        </form>
+
+        <form id="restablecerForm" class="auth-hidden" autocomplete="off">
+          <p class="auth-note" id="destinoTexto">—</p>
+
+          <div class="field">
+            <label for="codigo">Código de 4 dígitos</label>
+            <input class="form-control code-input" id="codigo" name="codigo" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="0000" autocomplete="one-time-code" required />
+          </div>
+
+          <div class="field">
+            <label for="nuevaClave">Nueva contraseña</label>
+            <input class="form-control" id="nuevaClave" name="nuevaClave" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" required minlength="8" />
+            <p class="hint">Mínimo 8 caracteres, con al menos una letra y un número.</p>
+          </div>
+
+          <div class="field">
+            <label for="confirmarClave">Confirmar nueva contraseña</label>
+            <input class="form-control" id="confirmarClave" name="confirmarClave" type="password" placeholder="Repita la contraseña" autocomplete="new-password" required />
+          </div>
+
+          <button class="btn btn-primary btn-block" id="btnRestablecer" type="submit">Cambiar contraseña</button>
+          <button class="btn btn-ghost btn-block mt-1" id="btnVolver" type="button">Solicitar otro código</button>
+
+          <div id="demoCodigo"></div>
+        </form>
+
+        <div id="recuperarListo" class="auth-hidden">
+          <div class="alert alert-ok">Contraseña actualizada. Ya puede iniciar sesión con su nueva contraseña.</div>
+          <a class="btn btn-primary btn-block" href="/login.html#local">Ir a iniciar sesión</a>
+        </div>
+
+        <p class="login-foot">¿No tiene cuenta? <a href="/registro.html">Crear cuenta</a> · <a href="/login.html">Iniciar sesión</a></p>
+      </div>
+    </section>
+  </div>
+
+  <script src="/js/api.js?v=5"></script>
+  <script>
+    (function () {
+      const $ = function (id) { return document.getElementById(id); };
+      let solicitud = null;
+
+      function alerta(html, tipo) {
+        $('recuperarAlerta').innerHTML = html
+          ? '<div class="alert alert-' + (tipo || 'danger') + '">' + html + '</div>'
+          : '';
+      }
+
+      function marcarPaso(numero) {
+        for (let i = 1; i <= 3; i += 1) {
+          const el = $('rstep' + i);
+          if (!el) continue;
+          el.classList.toggle('is-active', i === numero);
+          el.classList.toggle('is-done', i < numero);
+        }
+      }
+
+      function mensajeError(json, alternativo) {
+        if (json && json.error && json.error.mensaje) return json.error.mensaje;
+        return alternativo || 'No fue posible completar la operación.';
+      }
+
+      async function enviar(url, cuerpo) {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cuerpo || {})
+        });
+        const json = await res.json().catch(function () { return null; });
+        if (!res.ok || !json || json.exito === false) {
+          const error = new Error(mensajeError(json));
+          error.codigo = json && json.error && json.error.codigo;
+          throw error;
+        }
+        return json.datos;
+      }
+
+      API.pedir('/api/auth/config')
+        .then(function (cfg) {
+          if (cfg.demoCodigos) {
+            alerta('Modo demostración: el código de recuperación se mostrará en pantalla y en la consola del servidor.', 'info');
+          } else {
+            const faltan = [];
+            if (!cfg.smtpConfigurado) faltan.push('Gmail');
+            if (!cfg.whatsappConfigurado) faltan.push('WhatsApp');
+            if (faltan.length) {
+              alerta('Falta configurar ' + faltan.join(' y ') + ' en el servidor para enviar los códigos reales.', 'warn');
+            }
+          }
+        })
+        .catch(function () { /* ignorar */ });
+
+      // ----------------------------------------------------------
+      // Solicitar codigo
+      // ----------------------------------------------------------
+      $('solicitarForm').addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        alerta('', 'danger');
+        const identificador = $('identificador').value.trim();
+        const canal = $('canal').value;
+        const boton = $('btnSolicitar');
+
+        if (!identificador) {
+          alerta('Ingrese su correo o teléfono.', 'danger');
+          return;
+        }
+
+        boton.disabled = true;
+        boton.textContent = 'Enviando…';
+
+        try {
+          const datos = await enviar('/api/auth/recuperar', {
+            identificador: identificador,
+            canal: canal
+          });
+
+          solicitud = { identificador: identificador, canal: canal };
+          $('solicitarForm').classList.add('auth-hidden');
+          $('restablecerForm').classList.remove('auth-hidden');
+          $('destinoTexto').textContent =
+            canal === 'EMAIL'
+              ? 'Si la cuenta existe, enviamos un código a su correo.'
+              : 'Si la cuenta existe, enviamos un código a su WhatsApp.';
+          marcarPaso(2);
+
+          if (datos && datos.demo && datos.demo.codigo) {
+            $('codigo').value = datos.demo.codigo;
+            $('demoCodigo').innerHTML =
+              '<div class="auth-demo-box"><strong>Modo demostración</strong><br>Código de recuperación: <strong>' +
+              datos.demo.codigo + '</strong></div>';
+            alerta('Código de recuperación generado en modo demostración.', 'info');
+          } else {
+            $('demoCodigo').innerHTML = '';
+            alerta('Solicitud procesada. Revise su ' + (canal === 'EMAIL' ? 'Gmail' : 'WhatsApp') + '.', 'info');
+          }
+        } catch (e) {
+          alerta(e.message || 'No fue posible solicitar el código.', 'danger');
+        } finally {
+          boton.disabled = false;
+          boton.textContent = 'Enviar código de recuperación';
+        }
+      });
+
+      // ----------------------------------------------------------
+      // Restablecer contrasena
+      // ----------------------------------------------------------
+      $('restablecerForm').addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        alerta('', 'danger');
+        if (!solicitud) {
+          alerta('Primero solicite un código de recuperación.', 'danger');
+          return;
+        }
+
+        const codigo = $('codigo').value.trim();
+        const nuevaClave = $('nuevaClave').value;
+        const confirmarClave = $('confirmarClave').value;
+        const boton = $('btnRestablecer');
+
+        if (!/^\d{4}$/.test(codigo)) {
+          alerta('Ingrese el código de 4 dígitos.', 'danger');
+          return;
+        }
+        if (nuevaClave.length < 8 || !/[A-Za-z]/.test(nuevaClave) || !/\d/.test(nuevaClave)) {
+          alerta('La contraseña debe tener al menos 8 caracteres e incluir una letra y un número.', 'danger');
+          return;
+        }
+        if (nuevaClave !== confirmarClave) {
+          alerta('Las contraseñas no coinciden.', 'danger');
+          return;
+        }
+
+        boton.disabled = true;
+        boton.textContent = 'Cambiando…';
+
+        try {
+          await enviar('/api/auth/restablecer', {
+            identificador: solicitud.identificador,
+            canal: solicitud.canal,
+            codigo: codigo,
+            nueva_clave: nuevaClave,
+            confirmar_clave: confirmarClave
+          });
+          $('restablecerForm').classList.add('auth-hidden');
+          $('recuperarListo').classList.remove('auth-hidden');
+          marcarPaso(3);
+          alerta('', 'danger');
+        } catch (e) {
+          alerta(e.message || 'No fue posible cambiar la contraseña.', 'danger');
+        } finally {
+          boton.disabled = false;
+          boton.textContent = 'Cambiar contraseña';
+        }
+      });
+
+      $('btnVolver').addEventListener('click', function () {
+        solicitud = null;
+        $('restablecerForm').classList.add('auth-hidden');
+        $('solicitarForm').classList.remove('auth-hidden');
+        $('recuperarListo').classList.add('auth-hidden');
+        $('demoCodigo').innerHTML = '';
+        $('codigo').value = '';
+        $('nuevaClave').value = '';
+        $('confirmarClave').value = '';
+        alerta('', 'danger');
+        marcarPaso(1);
+      });
+    })();
+  </script>
+</body>
+</html>

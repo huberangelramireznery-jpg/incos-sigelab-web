@@ -1,11 +1,15 @@
 'use strict';
 
 const sia = require('../sia/client');
+const localAuth = require('../services/localAuth');
 const { permisosDe, normalizarCargos } = require('../services/permisos');
 const { fail } = require('../utils/respuesta');
 
 /**
- * Valida el token del SIA en cada peticion autenticada.
+ * Valida el token en cada peticion autenticada.
+ * Acepta dos emisores:
+ *   - SIA (RS256, token institucional)
+ *   - SIGELAB local (HS256, cuentas creadas en el sistema)
  * Adjunta req.user, req.token y req.permisos.
  */
 async function requireAuth(req, res, next) {
@@ -15,8 +19,15 @@ async function requireAuth(req, res, next) {
   }
   const token = cabecera.slice('Bearer '.length).trim();
   try {
-    const payload = await sia.verifyToken(token);
-    const user = sia.usuarioDesdeToken(payload);
+    let user;
+
+    if (localAuth.esTokenLocal(token)) {
+      user = await localAuth.validarTokenLocal(token);
+    } else {
+      const payload = await sia.verifyToken(token);
+      user = sia.usuarioDesdeToken(payload);
+    }
+
     const permisos = permisosDe(user);
 
     if (!permisos.canRead) {
@@ -28,7 +39,7 @@ async function requireAuth(req, res, next) {
     req.permisos = permisos;
     return next();
   } catch (e) {
-    if (e instanceof sia.SiaError) {
+    if (e instanceof sia.SiaError || e instanceof localAuth.LocalAuthError) {
       return fail(res, e.status, e.codigo, e.message);
     }
     return fail(res, 401, 'TOKEN_INVALIDO', 'No fue posible validar el token.');

@@ -8,6 +8,7 @@ node_modules/
 
 # Datos locales generados por el almacenamiento de archivos
 data/store.json
+data/local-jwt-secret
 
 # Credenciales de Firebase (nunca versionar)
 serviceAccountKey.json

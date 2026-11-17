@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Crear cuenta · SIGELAB-INCOS</title>
+  <link rel="stylesheet" href="/css/app.css?v=5" />
+</head>
+<body>
+  <div class="login-wrap">
+    <img class="login-page-logo" src="/img/logo-sia.jpeg" alt="Logo INCOS-BENI" />
+    <section class="login-brand">
+      <div>
+        <span class="pill"><span class="dot" style="width:9px;height:9px;border-radius:50%;background:#5eead4;display:inline-block"></span> Ecosistema INCOS-BENI</span>
+        <h1>Crear cuenta</h1>
+        <p>Registre su correo de Google y su número de WhatsApp. Le enviaremos un código de 4 dígitos para confirmar que la cuenta es suya.</p>
+        <div class="mt-3">
+          <p class="small" style="opacity:.9;margin-bottom:6px">✓ Código de verificación por Gmail</p>
+          <p class="small" style="opacity:.9;margin-bottom:6px">✓ Código de verificación por WhatsApp</p>
+          <p class="small" style="opacity:.9;margin-bottom:6px">✓ Recuperación de contraseña con código</p>
+          <p class="small" style="opacity:.9;margin-bottom:0">✓ La cuenta SIGELAB es independiente del SIA</p>
+        </div>
+      </div>
+      <div class="small" style="opacity:.85">
+        <div>¿Ya tiene cuenta? <a href="/login.html" style="color:#d7f5f1;font-weight:700">Iniciar sesión</a></div>
+        <div class="mt-1"><a href="/recuperar.html" style="color:#d7f5f1">¿Olvidaste tu contraseña?</a></div>
+      </div>
+    </section>
+
+    <section class="login-panel">
+      <div class="login-card wide">
+        <span class="auth-badge">Nueva cuenta SIGELAB</span>
+        <h2>Crear cuenta</h2>
+        <p class="lead">Use un correo real de Google (@gmail.com) y un número de WhatsApp con código de país.</p>
+
+        <div id="registroAlerta"></div>
+
+        <div class="auth-steps" aria-label="Pasos del registro">
+          <span class="auth-step is-active" id="step1">1. Datos</span>
+          <span class="auth-step" id="step2">2. Verificación</span>
+          <span class="auth-step" id="step3">3. Listo</span>
+        </div>
+
+        <form id="registroForm" autocomplete="on">
+          <div class="field">
+            <label for="nombre">Nombre completo</label>
+            <input class="form-control" id="nombre" name="nombre" type="text" placeholder="Ej. María Fernanda López" autocomplete="name" required />
+          </div>
+
+          <div class="field">
+            <label for="correo">Correo de Google (Gmail)</label>
+            <input class="form-control" id="correo" name="correo" type="email" placeholder="ejemplo@gmail.com" autocomplete="email" required />
+            <p class="hint">Debe ser un correo real de Google. Allí llegará el código de 4 dígitos.</p>
+          </div>
+
+          <div class="field">
+            <label for="telefono">Número de WhatsApp</label>
+            <input class="form-control" id="telefono" name="telefono" type="tel" placeholder="+591 71234567" autocomplete="tel" required />
+            <p class="hint">Incluya el código de país. En Bolivia: +591. Ejemplo: +591 71234567.</p>
+          </div>
+
+          <div class="field">
+            <label for="clave">Contraseña</label>
+            <input class="form-control" id="clave" name="clave" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" required minlength="8" />
+            <p class="hint">Mínimo 8 caracteres, con al menos una letra y un número.</p>
+          </div>
+
+          <div class="field">
+            <label for="confirmar">Confirmar contraseña</label>
+            <input class="form-control" id="confirmar" name="confirmar" type="password" placeholder="Repita la contraseña" autocomplete="new-password" required />
+          </div>
+
+          <button class="btn btn-primary btn-block" id="btnRegistrar" type="submit">Crear cuenta y enviar códigos</button>
+        </form>
+
+        <div id="verificacion" class="auth-hidden">
+          <div id="verificacionAlerta"></div>
+
+          <div class="verify-grid">
+            <div class="verify-card">
+              <h3>1. Correo Gmail</h3>
+              <p class="hint" id="verifyCorreoTexto">—</p>
+              <div class="code-input-wrap">
+                <input class="code-input" id="codigoCorreo" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="0000" aria-label="Código del correo" />
+              </div>
+              <button class="btn btn-primary btn-block" id="btnVerificarCorreo" type="button">Verificar correo</button>
+              <button class="btn btn-ghost btn-block mt-1" id="btnReenviarCorreo" type="button">Reenviar código</button>
+            </div>
+
+            <div class="verify-card">
+              <h3>2. WhatsApp</h3>
+              <p class="hint" id="verifyWhatsappTexto">—</p>
+              <div class="code-input-wrap">
+                <input class="code-input" id="codigoWhatsapp" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="0000" aria-label="Código de WhatsApp" />
+              </div>
+              <button class="btn btn-primary btn-block" id="btnVerificarWhatsapp" type="button">Verificar WhatsApp</button>
+              <button class="btn btn-ghost btn-block mt-1" id="btnReenviarWhatsapp" type="button">Reenviar código</button>
+            </div>
+          </div>
+
+          <div id="demoCodigos"></div>
+          <p class="hint mt-2">El código del correo activa la cuenta. El código de WhatsApp confirma su número.</p>
+
+          <div id="listo" class="auth-hidden mt-2">
+            <div class="alert alert-ok">¡Cuenta activada! Ya puede iniciar sesión con su correo o teléfono.</div>
+            <a class="btn btn-primary btn-block" href="/login.html#local">Ir a iniciar sesión</a>
+          </div>
+
+          <div class="auth-links">
+            <a href="#" id="reiniciarRegistro">Registrar otra cuenta</a>
+          </div>
+        </div>
+
+        <p class="login-foot">¿Ya tiene cuenta? <a href="/login.html">Iniciar sesión</a> · <a href="/recuperar.html">¿Olvidaste tu contraseña?</a></p>
+      </div>
+    </section>
+  </div>
+
+  <script src="/js/api.js?v=5"></script>
+  <script>
+    (function () {
+      const $ = function (id) { return document.getElementById(id); };
+      const CLAVE_SESION = 'sigelab_registro_pendiente';
+      let estado = null;
+
+      function alertaGeneral(html, tipo) {
+        $('registroAlerta').innerHTML = html
+          ? '<div class="alert alert-' + (tipo || 'danger') + '">' + html + '</div>'
+          : '';
+      }
+
+      function alertaVerificacion(html, tipo) {
+        $('verificacionAlerta').innerHTML = html
+          ? '<div class="alert alert-' + (tipo || 'danger') + '">' + html + '</div>'
+          : '';
+      }
+
+      function marcarPaso(numero) {
+        for (let i = 1; i <= 3; i += 1) {
+          const el = $('step' + i);
+          if (!el) continue;
+          el.classList.toggle('is-active', i === numero);
+          el.classList.toggle('is-done', i < numero);
+        }
+      }
+
+      function mostrarDemo(demo) {
+        const caja = $('demoCodigos');
+        if (!demo) {
+          caja.innerHTML = '';
+          return;
+        }
+        caja.innerHTML =
+          '<div class="auth-demo-box"><strong>Modo demostración</strong><br>' +
+          'Código del correo: <strong>' + (demo.correo || '—') + '</strong><br>' +
+          'Código de WhatsApp: <strong>' + (demo.whatsapp || '—') + '</strong></div>';
+        if (demo.correo) $('codigoCorreo').value = demo.correo;
+        if (demo.whatsapp) $('codigoWhatsapp').value = demo.whatsapp;
+      }
+
+      function guardarEstado() {
+        if (!estado) return;
+        try {
+          sessionStorage.setItem(CLAVE_SESION, JSON.stringify(estado));
+        } catch (e) { /* ignorar */ }
+      }
+
+      function cargarEstado() {
+        try {
+          const texto = sessionStorage.getItem(CLAVE_SESION);
+          return texto ? JSON.parse(texto) : null;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function limpiarEstado() {
+        estado = null;
+        try { sessionStorage.removeItem(CLAVE_SESION); } catch (e) { /* ignorar */ }
+      }
+
+      function pintarVerificacion() {
+        if (!estado) return;
+        $('registroForm').classList.add('auth-hidden');
+        $('verificacion').classList.remove('auth-hidden');
+        $('verifyCorreoTexto').textContent = 'Enviamos un código de 4 dígitos a ' + estado.correo + '.';
+        $('verifyWhatsappTexto').textContent = 'Enviamos un código de 4 dígitos a ' + estado.telefono + '.';
+        mostrarDemo(estado.demo);
+
+        if (estado.correoVerificado) {
+          $('btnVerificarCorreo').textContent = 'Correo verificado ✓';
+          $('btnVerificarCorreo').disabled = true;
+          $('btnVerificarCorreo').classList.remove('btn-primary');
+          $('btnVerificarCorreo').classList.add('btn-ghost');
+          $('listo').classList.remove('auth-hidden');
+          marcarPaso(3);
+        } else {
+          marcarPaso(2);
+        }
+
+        if (estado.whatsappVerificado) {
+          $('btnVerificarWhatsapp').textContent = 'WhatsApp verificado ✓';
+          $('btnVerificarWhatsapp').disabled = true;
+          $('btnVerificarWhatsapp').classList.remove('btn-primary');
+          $('btnVerificarWhatsapp').classList.add('btn-ghost');
+        }
+      }
+
+      function mensajeError(json, alternativo) {
+        if (json && json.error && json.error.mensaje) return json.error.mensaje;
+        return alternativo || 'No fue posible completar la operación.';
+      }
+
+      async function enviar(url, cuerpo) {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cuerpo || {})
+        });
+        const json = await res.json().catch(function () { return null; });
+        if (!res.ok || !json || json.exito === false) {
+          const error = new Error(mensajeError(json));
+          error.codigo = json && json.error && json.error.codigo;
+          throw error;
+        }
+        return json.datos;
+      }
+
+      // ----------------------------------------------------------
+      // Aviso de modo de envio
+      // ----------------------------------------------------------
+      API.pedir('/api/auth/config')
+        .then(function (cfg) {
+          if (cfg.demoCodigos) {
+            alertaGeneral(
+              'Modo demostración activo: los códigos de 4 dígitos se mostrarán en pantalla y en la consola del servidor. Para enviarlos de verdad, configure Gmail y WhatsApp en el servidor.',
+              'info'
+            );
+          } else {
+            const faltan = [];
+            if (!cfg.smtpConfigurado) faltan.push('Gmail');
+            if (!cfg.whatsappConfigurado) faltan.push('WhatsApp');
+            if (faltan.length) {
+              alertaGeneral(
+                'Falta configurar ' + faltan.join(' y ') + ' en el servidor. El registro real no podrá enviar los códigos hasta completar esa configuración.',
+                'warn'
+              );
+            }
+          }
+        })
+        .catch(function () { /* sin configuracion visible */ });
+
+      // ----------------------------------------------------------
+      // Registro
+      // ----------------------------------------------------------
+      $('registroForm').addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        alertaGeneral('', 'danger');
+        alertaVerificacion('', 'danger');
+
+        const nombre = $('nombre').value.trim();
+        const correo = $('correo').value.trim().toLowerCase();
+        const telefono = $('telefono').value.trim();
+        const clave = $('clave').value;
+        const confirmar = $('confirmar').value;
+        const boton = $('btnRegistrar');
+
+        if (nombre.length < 3) {
+          alertaGeneral('Ingrese su nombre completo.', 'danger');
+          return;
+        }
+        if (!/^[a-z0-9._%+-]+@(gmail\.com|googlemail\.com)$/i.test(correo)) {
+          alertaGeneral('Use un correo real de Google (@gmail.com).', 'danger');
+          return;
+        }
+        if (telefono.replace(/\D/g, '').length < 8) {
+          alertaGeneral('Ingrese un número de WhatsApp válido con código de país. Ej: +591 71234567.', 'danger');
+          return;
+        }
+        if (clave.length < 8 || !/[A-Za-z]/.test(clave) || !/\d/.test(clave)) {
+          alertaGeneral('La contraseña debe tener al menos 8 caracteres e incluir una letra y un número.', 'danger');
+          return;
+        }
+        if (clave !== confirmar) {
+          alertaGeneral('Las contraseñas no coinciden.', 'danger');
+          return;
+        }
+
+        boton.disabled = true;
+        boton.textContent = 'Creando cuenta…';
+
+        try {
+          const datos = await enviar('/api/auth/registro', {
+            nombre_completo: nombre,
+            correo: correo,
+            telefono: telefono,
+            clave: clave,
+            confirmar_clave: confirmar
+          });
+
+          estado = {
+            usuarioId: datos.usuario.usuario_id,
+            correo: datos.usuario.correo,
+            telefono: datos.usuario.telefono,
+            demo: datos.demo || null,
+            correoVerificado: false,
+            whatsappVerificado: false
+          };
+          guardarEstado();
+          const avisoWhatsapp =
+            datos.envios &&
+            datos.envios.whatsapp &&
+            !datos.envios.whatsapp.enviado &&
+            !datos.demo
+              ? ' No se pudo enviar el código de WhatsApp; use "Reenviar código" o verifique el número más tarde.'
+              : '';
+          alertaGeneral(
+            'Cuenta creada. Revise el código enviado a su correo para activarla.' + avisoWhatsapp,
+            avisoWhatsapp ? 'warn' : 'ok'
+          );
+          pintarVerificacion();
+        } catch (e) {
+          alertaGeneral(e.message || 'No fue posible crear la cuenta.', 'danger');
+        } finally {
+          boton.disabled = false;
+          boton.textContent = 'Crear cuenta y enviar códigos';
+        }
+      });
+
+      // ----------------------------------------------------------
+      // Verificar correo
+      // ----------------------------------------------------------
+      $('btnVerificarCorreo').addEventListener('click', async function () {
+        if (!estado) return;
+        const boton = $('btnVerificarCorreo');
+        const codigo = $('codigoCorreo').value.trim();
+        alertaVerificacion('', 'danger');
+
+        if (!/^\d{4}$/.test(codigo)) {
+          alertaVerificacion('Ingrese el código de 4 dígitos que llegó a su correo.', 'danger');
+          return;
+        }
+
+        boton.disabled = true;
+        boton.textContent = 'Verificando…';
+
+        try {
+          await enviar('/api/auth/verificar-codigo', {
+            usuario_id: estado.usuarioId,
+            canal: 'EMAIL',
+            codigo: codigo
+          });
+          estado.correoVerificado = true;
+          guardarEstado();
+          alertaVerificacion('Correo verificado. ¡Su cuenta está activa!', 'ok');
+          pintarVerificacion();
+          if (estado.whatsappVerificado) {
+            alertaVerificacion('Correo y WhatsApp verificados. ¡Cuenta activa!', 'ok');
+          }
+        } catch (e) {
+          alertaVerificacion(e.message || 'El código no es correcto.', 'danger');
+          boton.disabled = false;
+          boton.textContent = 'Verificar correo';
+        }
+      });
+
+      // ----------------------------------------------------------
+      // Verificar WhatsApp
+      // ----------------------------------------------------------
+      $('btnVerificarWhatsapp').addEventListener('click', async function () {
+        if (!estado) return;
+        const boton = $('btnVerificarWhatsapp');
+        const codigo = $('codigoWhatsapp').value.trim();
+        alertaVerificacion('', 'danger');
+
+        if (!/^\d{4}$/.test(codigo)) {
+          alertaVerificacion('Ingrese el código de 4 dígitos que llegó a su WhatsApp.', 'danger');
+          return;
+        }
+
+        boton.disabled = true;
+        boton.textContent = 'Verificando…';
+
+        try {
+          await enviar('/api/auth/verificar-codigo', {
+            usuario_id: estado.usuarioId,
+            canal: 'WHATSAPP',
+            codigo: codigo
+          });
+          estado.whatsappVerificado = true;
+          guardarEstado();
+          alertaVerificacion('WhatsApp verificado correctamente.', 'ok');
+          pintarVerificacion();
+          if (!estado.correoVerificado) {
+            alertaVerificacion('WhatsApp verificado. Ahora verifique su correo para activar la cuenta.', 'info');
+          }
+        } catch (e) {
+          alertaVerificacion(e.message || 'El código no es correcto.', 'danger');
+          boton.disabled = false;
+          boton.textContent = 'Verificar WhatsApp';
+        }
+      });
+
+      // ----------------------------------------------------------
+      // Reenviar codigos
+      // ----------------------------------------------------------
+      async function reenviar(canal, boton, textoNormal) {
+        if (!estado) return;
+        alertaVerificacion('', 'danger');
+        boton.disabled = true;
+        boton.textContent = 'Enviando…';
+        try {
+          const datos = await enviar('/api/auth/reenviar-codigo', {
+            usuario_id: estado.usuarioId,
+            canal: canal,
+            tipo: 'VERIFICAR'
+          });
+          if (datos && datos.demo && datos.demo.codigo) {
+            if (canal === 'EMAIL') {
+              $('codigoCorreo').value = datos.demo.codigo;
+              estado.demo = Object.assign({}, estado.demo || {}, { correo: datos.demo.codigo });
+            } else {
+              $('codigoWhatsapp').value = datos.demo.codigo;
+              estado.demo = Object.assign({}, estado.demo || {}, { whatsapp: datos.demo.codigo });
+            }
+            guardarEstado();
+            mostrarDemo(estado.demo);
+            alertaVerificacion('Modo demostración: nuevo código ' + datos.demo.codigo + '.', 'info');
+          } else {
+            alertaVerificacion(
+              canal === 'EMAIL' ? 'Código reenviado. Revise su Gmail.' : 'Código reenviado. Revise su WhatsApp.',
+              'ok'
+            );
+          }
+        } catch (e) {
+          alertaVerificacion(e.message || 'No fue posible reenviar el código.', 'danger');
+        } finally {
+          boton.disabled = false;
+          boton.textContent = textoNormal;
+        }
+      }
+
+      $('btnReenviarCorreo').addEventListener('click', function () {
+        reenviar('EMAIL', $('btnReenviarCorreo'), 'Reenviar código');
+      });
+      $('btnReenviarWhatsapp').addEventListener('click', function () {
+        reenviar('WHATSAPP', $('btnReenviarWhatsapp'), 'Reenviar código');
+      });
+
+      // ----------------------------------------------------------
+      // Reiniciar / restaurar estado
+      // ----------------------------------------------------------
+      $('reiniciarRegistro').addEventListener('click', function (ev) {
+        ev.preventDefault();
+        limpiarEstado();
+        $('registroForm').reset();
+        $('registroForm').classList.remove('auth-hidden');
+        $('verificacion').classList.add('auth-hidden');
+        $('listo').classList.add('auth-hidden');
+        $('demoCodigos').innerHTML = '';
+        $('verificacionAlerta').innerHTML = '';
+        alertaGeneral('', 'danger');
+        marcarPaso(1);
+      });
+
+      const guardado = cargarEstado();
+      if (guardado && guardado.usuarioId) {
+        estado = guardado;
+        pintarVerificacion();
+      }
+    })();
+  </script>
+</body>
+</html>

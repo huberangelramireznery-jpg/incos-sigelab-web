@@ -38,7 +38,12 @@ app.use('/api', (req, res) => {
 // Manejo estandar de errores
 // ------------------------------------------------------------------
 app.use((err, req, res, next) => {
-  if (err && (err.name === 'StoreError' || err.name === 'SiaError')) {
+  if (
+    err &&
+    (err.name === 'StoreError' ||
+      err.name === 'SiaError' ||
+      err.name === 'LocalAuthError')
+  ) {
     return fail(res, err.status || 400, err.codigo || 'DATOS_INVALIDOS', err.message);
   }
   if (err && err.type === 'entity.parse.failed') {
@@ -55,6 +60,10 @@ const server = app.listen(config.port, () => {
   console.log('  Demo:          http://127.0.0.1:' + config.port);
   console.log('  Nucleo SIA:    ' + config.siaUrl);
   console.log('  Almacenamiento:' + ' ' + store.backend);
+  console.log(
+    '  Cuentas locales: ' +
+      (config.authDemoCodes ? 'modo demo (código en pantalla/consola)' : 'envío real')
+  );
   console.log('  Salud:         http://127.0.0.1:' + config.port + '/salud-integracion');
   console.log('====================================================');
 });

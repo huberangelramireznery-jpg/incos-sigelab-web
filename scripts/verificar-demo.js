@@ -121,6 +121,185 @@ async function main() {
   const me = await req('/api/auth/me', { token: tokenEncargado });
   check('GET /api/auth/me con token -> 200', me.status === 200, 'status ' + me.status);
 
+  // ----------------------------------------------------------------
+  console.log('\n2b. Cuentas locales SIGELAB (Gmail + WhatsApp)');
+  // ----------------------------------------------------------------
+  const sufijo = String(Date.now());
+  const correoLocal = 'prueba.' + sufijo + '@gmail.com';
+  const telefonoLocal = '+5917' + sufijo.slice(-7);
+  const claveLocal = 'Demo2026*';
+
+  const correoNoGoogle = await req('/api/auth/registro', {
+    method: 'POST',
+    body: {
+      nombre_completo: 'Prueba Local',
+      correo: 'prueba.' + sufijo + '@hotmail.com',
+      telefono: telefonoLocal,
+      clave: claveLocal,
+      confirmar_clave: claveLocal,
+    },
+  });
+  check(
+    'Registro con correo no Google -> 400 CORREO_NO_GOOGLE',
+    correoNoGoogle.status === 400 && correoNoGoogle.json?.error?.codigo === 'CORREO_NO_GOOGLE',
+    'status ' + correoNoGoogle.status
+  );
+
+  const registroLocal = await req('/api/auth/registro', {
+    method: 'POST',
+    body: {
+      nombre_completo: 'Prueba Local',
+      correo: correoLocal,
+      telefono: telefonoLocal,
+      clave: claveLocal,
+      confirmar_clave: claveLocal,
+    },
+  });
+  check(
+    'Registro con Gmail + WhatsApp -> 201',
+    registroLocal.status === 201 && registroLocal.json?.datos?.usuario?.usuario_id,
+    'status ' + registroLocal.status
+  );
+  const usuarioLocalId = registroLocal.json?.datos?.usuario?.usuario_id;
+  const codigoCorreo = registroLocal.json?.datos?.demo?.correo;
+  const codigoWhatsapp = registroLocal.json?.datos?.demo?.whatsapp;
+  check('El registro devuelve código de correo de 4 dígitos', /^\d{4}$/.test(String(codigoCorreo || '')), String(codigoCorreo));
+  check('El registro devuelve código de WhatsApp de 4 dígitos', /^\d{4}$/.test(String(codigoWhatsapp || '')), String(codigoWhatsapp));
+  check(
+    'La cuenta nace inactiva hasta verificar el correo',
+    registroLocal.json?.datos?.usuario?.activo === false
+  );
+
+  const telefonoDuplicado = await req('/api/auth/registro', {
+    method: 'POST',
+    body: {
+      nombre_completo: 'Otra Persona',
+      correo: 'otra.' + sufijo + '@gmail.com',
+      telefono: telefonoLocal,
+      clave: claveLocal,
+      confirmar_clave: claveLocal,
+    },
+  });
+  check(
+    'Teléfono duplicado -> 400 REGISTRO_DUPLICADO',
+    telefonoDuplicado.status === 400 && telefonoDuplicado.json?.error?.codigo === 'REGISTRO_DUPLICADO',
+    'status ' + telefonoDuplicado.status
+  );
+
+  const codigoIncorrecto = String((Number(codigoCorreo) + 1) % 10000).padStart(4, '0');
+  const verificacionMala = await req('/api/auth/verificar-codigo', {
+    method: 'POST',
+    body: { usuario_id: usuarioLocalId, canal: 'EMAIL', codigo: codigoIncorrecto },
+  });
+  check(
+    'Código de correo incorrecto -> 400 CODIGO_INVALIDO',
+    verificacionMala.status === 400 && verificacionMala.json?.error?.codigo === 'CODIGO_INVALIDO',
+    'status ' + verificacionMala.status
+  );
+
+  const verificacionCorreo = await req('/api/auth/verificar-codigo', {
+    method: 'POST',
+    body: { usuario_id: usuarioLocalId, canal: 'EMAIL', codigo: codigoCorreo },
+  });
+  check(
+    'Verificar código de correo -> cuenta activa',
+    verificacionCorreo.status === 200 && verificacionCorreo.json?.datos?.usuario?.activo === true,
+    'status ' + verificacionCorreo.status
+  );
+
+  const loginLocal = await req('/api/auth/login-local', {
+    method: 'POST',
+    body: { identificador: correoLocal, clave: claveLocal },
+  });
+  check('Login local -> 200', loginLocal.status === 200, 'status ' + loginLocal.status);
+  const tokenLocal = loginLocal.json?.datos?.token;
+  check(
+    'Cuenta local es de solo lectura (canManage=false)',
+    loginLocal.json?.datos?.permisos?.canManage === false &&
+      loginLocal.json?.datos?.permisos?.canRead === true
+  );
+
+  const ambientesLocal = await req('/api/ambientes', { token: tokenLocal });
+  check(
+    'Token local puede consultar ambientes',
+    ambientesLocal.status === 200 && Array.isArray(ambientesLocal.json?.datos) && ambientesLocal.json.datos.length > 0,
+    'status ' + ambientesLocal.status
+  );
+
+  const crearConLocal = await req('/api/equipos', {
+    method: 'POST',
+    token: tokenLocal,
+    body: {
+      codigo_activo: 'TEST-LOCAL-' + sufijo,
+      tipo: 'COMPUTADORA',
+      marca: 'Prueba',
+      modelo: 'Local',
+      ambiente_id: 1,
+      fecha_alta: '2026-01-01',
+    },
+  });
+  check(
+    'Cuenta local NO puede crear equipos -> 403',
+    crearConLocal.status === 403 && crearConLocal.json?.error?.codigo === 'SIN_PERMISO',
+    'status ' + crearConLocal.status
+  );
+
+  const recuperar = await req('/api/auth/recuperar', {
+    method: 'POST',
+    body: { identificador: correoLocal, canal: 'EMAIL' },
+  });
+  check(
+    'Solicitar recuperación -> 200 con código en modo demo',
+    recuperar.status === 200 && /^\d{4}$/.test(String(recuperar.json?.datos?.demo?.codigo || '')),
+    'status ' + recuperar.status
+  );
+  const codigoRecuperacion = recuperar.json?.datos?.demo?.codigo;
+
+  const restablecer = await req('/api/auth/restablecer', {
+    method: 'POST',
+    body: {
+      identificador: correoLocal,
+      canal: 'EMAIL',
+      codigo: codigoRecuperacion,
+      nueva_clave: 'Nueva2026*',
+      confirmar_clave: 'Nueva2026*',
+    },
+  });
+  check('Restablecer contraseña -> 200', restablecer.status === 200, 'status ' + restablecer.status);
+
+  const loginNuevaClave = await req('/api/auth/login-local', {
+    method: 'POST',
+    body: { identificador: correoLocal, clave: 'Nueva2026*' },
+  });
+  check('Login con la nueva contraseña -> 200', loginNuevaClave.status === 200, 'status ' + loginNuevaClave.status);
+
+  const loginClaveVieja = await req('/api/auth/login-local', {
+    method: 'POST',
+    body: { identificador: correoLocal, clave: claveLocal },
+  });
+  check(
+    'Login con la contraseña anterior -> 401',
+    loginClaveVieja.status === 401,
+    'status ' + loginClaveVieja.status
+  );
+
+  const registroActivoDuplicado = await req('/api/auth/registro', {
+    method: 'POST',
+    body: {
+      nombre_completo: 'Prueba Local',
+      correo: correoLocal,
+      telefono: telefonoLocal,
+      clave: claveLocal,
+      confirmar_clave: claveLocal,
+    },
+  });
+  check(
+    'Registro con correo ya activo -> 400 REGISTRO_DUPLICADO',
+    registroActivoDuplicado.status === 400 &&
+      registroActivoDuplicado.json?.error?.codigo === 'REGISTRO_DUPLICADO',
+    'status ' + registroActivoDuplicado.status
+  );
+
   if (!tokenEncargado || !tokenTecnico) {
     console.log('\nNo se pudo continuar: faltan tokens válidos.');
     resumen();

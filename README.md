@@ -2,7 +2,7 @@
 
 **Sistema de laboratorios, ambientes e inventario de equipos** del ecosistema INCOS-BENI.
 
-Demo académico conforme al **Contrato de Conformidad v1.1.0** (núcleo SIA-INCOS en Railway). El SIGELAB no administra personas ni contraseñas: consume la identidad del SIA y guarda únicamente `persona_id`.
+Demo académico conforme al **Contrato de Conformidad v1.1.0** (núcleo SIA-INCOS en Railway). La autenticación institucional se delega en el SIA y solo se guarda `persona_id`. Como **módulo adicional del demo**, también existen cuentas locales SIGELAB con verificación por Gmail/WhatsApp y recuperación de contraseña (ver sección 4.1); este módulo no reemplaza la identidad del SIA.
 
 > **Repositorio:** <https://github.com/huberangelramireznery-jpg/incos-sigelab-web>
 
@@ -18,6 +18,8 @@ Demo académico conforme al **Contrato de Conformidad v1.1.0** (núcleo SIA-INCO
 - Guarda **historial de estados** (una fila por cambio, con `persona_id`).
 - Guarda **auditoría** de altas, ediciones y bajas.
 - Muestra un **dashboard** con tarjetas por ambiente y resumen por estado.
+- Permite **crear cuentas locales SIGELAB** con correo Gmail y teléfono WhatsApp.
+- Envía **códigos de 4 dígitos** para verificar la cuenta y para recuperar la contraseña.
 
 ---
 
@@ -49,6 +51,8 @@ PORT=4100
 DB_BACKEND=auto
 GOOGLE_APPLICATION_CREDENTIALS=./serviceAccountKey.json
 FIREBASE_PROJECT_ID=incos-sigelab-2026
+AUTH_DEMO_CODES=true
+WHATSAPP_PROVIDER=demo
 ```
 
 **Almacenamiento automático:**
@@ -97,6 +101,81 @@ Contraseña única: **`Demo2026*`**
 
 Las cuentas son ficticias (Anexo B del contrato).
 
+### 4.1 Cuentas locales SIGELAB (módulo adicional)
+
+Además de las cuentas SIA, el demo permite registrarse con:
+
+- **Correo real de Google** (`@gmail.com` o `@googlemail.com`).
+- **Número de WhatsApp** con código de país (Bolivia: `+591`).
+- **Contraseña** de al menos 8 caracteres, con al menos una letra y un número.
+
+Flujo:
+
+1. En `/registro.html` se crea la cuenta y se envían **dos códigos de 4 dígitos**: uno al Gmail y otro al WhatsApp.
+2. El código del correo **activa la cuenta**. El de WhatsApp confirma el número.
+3. En `/login.html`, pestaña **Cuenta SIGELAB**, se ingresa con el Gmail o el teléfono.
+4. En `/recuperar.html` (enlace **¿Olvidaste tu contraseña?**) se solicita un código por Gmail o WhatsApp y se define una nueva contraseña.
+
+#### Modo demostración (por defecto)
+
+```env
+AUTH_DEMO_CODES=true
+WHATSAPP_PROVIDER=demo
+```
+
+Los códigos se muestran en pantalla y en la consola del servidor. No requiere credenciales externas.
+
+> **Importante:** el registro en modo real exige **ambos canales** configurados (Gmail y WhatsApp). Si falta uno, el servidor responde `503` antes de crear la cuenta. La recuperación de contraseña solo necesita el canal que el usuario elija.
+
+#### Envío real por Gmail
+
+1. Activar la verificación en dos pasos de la cuenta Gmail.
+2. Crear una **contraseña de aplicación**: <https://myaccount.google.com/apppasswords>.
+3. Completar en `.env`:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=tu-cuenta@gmail.com
+SMTP_PASS=xxxx xxxx xxxx xxxx
+SMTP_FROM=SIGELAB-INCOS <tu-cuenta@gmail.com>
+AUTH_DEMO_CODES=false
+```
+
+#### Envío real por WhatsApp con Twilio
+
+```env
+WHATSAPP_PROVIDER=twilio
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_WHATSAPP_FROM=+14155238886
+AUTH_DEMO_CODES=false
+```
+
+- Con el **sandbox de Twilio**, cada destinatario debe unirse enviando el código `join ...` al número del sandbox.
+- Para producción se necesita un número de WhatsApp aprobado.
+
+#### Alternativa: Meta WhatsApp Cloud API
+
+```env
+WHATSAPP_PROVIDER=meta
+META_WHATSAPP_TOKEN=...
+META_WHATSAPP_PHONE_NUMBER_ID=...
+META_WHATSAPP_API_VERSION=v20.0
+AUTH_DEMO_CODES=false
+```
+
+Meta exige una **plantilla aprobada** para mensajes iniciados por la empresa fuera de la ventana de 24 horas.
+
+#### Seguridad de las cuentas locales
+
+- Las contraseñas se guardan con **scrypt** y sal aleatoria; nunca en texto plano.
+- Los códigos se guardan como **HMAC-SHA256**, vencen en **10 minutos**, admiten **5 intentos** y tienen límite de reenvío.
+- El secreto de las sesiones locales se genera en `data/local-jwt-secret` (ignorado por Git) o se toma de `JWT_LOCAL_SECRET`.
+- Las cuentas locales nacen con rol `CONSULTA` (**solo lectura**). Para darles más permisos, cambiar el campo `rol` en `sigelab_usuarios` a `ADMINISTRATIVO` (Encargado) o `SERVICIO` (Técnico) y volver a iniciar sesión.
+- Las cuentas locales **no reemplazan** al SIA: la cuenta SIA `9000006` sigue siendo la cuenta administrativa principal.
+
 ---
 
 ## 5. Reglas de permisos
@@ -134,8 +213,14 @@ Todas las respuestas usan el sobre único del ecosistema:
 | Método | Ruta | Descripción |
 |---|---|---|
 | POST | `/api/auth/login` | Login contra el SIA y validación local del JWT |
+| POST | `/api/auth/login-local` | Login con cuenta SIGELAB (Gmail/teléfono + contraseña) |
+| POST | `/api/auth/registro` | Crear cuenta local y enviar códigos por Gmail/WhatsApp |
+| POST | `/api/auth/verificar-codigo` | Verificar el código de correo o de WhatsApp |
+| POST | `/api/auth/reenviar-codigo` | Reenviar un código de verificación |
+| POST | `/api/auth/recuperar` | Solicitar código de recuperación de contraseña |
+| POST | `/api/auth/restablecer` | Cambiar la contraseña usando el código |
 | GET | `/api/auth/me` | Datos y permisos del token actual |
-| GET | `/api/auth/config` | Configuración pública (URL del SIA) |
+| GET | `/api/auth/config` | Configuración pública (SIA, modo demo, canales) |
 | GET | `/api/dashboard` | Resumen por estado y por ambiente |
 | GET | `/api/ambientes` | Ambientes con contador de equipos |
 | POST | `/api/ambientes` | Crear ambiente (Encargado) |
@@ -167,9 +252,12 @@ Todas las respuestas usan el sobre único del ecosistema:
 
 ## 8. Seguridad e integración
 
-- El login **nunca valida contraseñas localmente**: las envía al SIA.
-- El JWT se valida **en el servidor** con la clave pública (`RS256`, emisor `sia-incos`, expiración).
-- La clave pública se cachea **10 minutos**.
+- El login **SIA** nunca valida contraseñas localmente: las envía al núcleo.
+- El JWT del SIA se valida **en el servidor** con la clave pública (`RS256`, emisor `sia-incos`, expiración).
+- Las **cuentas locales** usan contraseñas con `scrypt` y un JWT propio (`HS256`, emisor `sigelab-local`) que el middleware también valida. La versión del token (`tv`) permite invalidar sesiones al cambiar la contraseña.
+- La clave pública del SIA se cachea **10 minutos**.
+- Los códigos de 4 dígitos se guardan como HMAC, vencen a los 10 minutos y tienen límite de intentos y reenvíos.
+- En modo real (`AUTH_DEMO_CODES=false`), la solicitud de recuperación responde igual exista o no la cuenta, para no revelar correos/teléfonos registrados.
 - Si el SIA no responde:
   - el demo sigue en línea y en **modo lectura** con lo ya guardado;
   - `/salud-integracion` reporta `siaEstado: "SIN_CONEXION"`;
@@ -216,9 +304,12 @@ La base de datos propia está **creada y operativa en Firebase Firestore**:
 - `sigelab_historial_estados`
 - `sigelab_auditoria`
 - `sigelab_cache_personas`
+- `sigelab_usuarios` (cuentas locales; contraseñas con scrypt)
+- `sigelab_codigos` (códigos de verificación/recuperación)
 - `sigelab_contadores` (IDs numéricos)
 
 El **borrado nunca es en cascada**: la baja de equipos es lógica (`estado = DE_BAJA`).
+Las colecciones `sigelab_usuarios` y `sigelab_codigos` **no se borran** al ejecutar `npm run seed`; así las cuentas creadas sobreviven a la recarga de datos de laboratorio.
 
 ### Volver a sembrar los datos
 
@@ -257,13 +348,16 @@ El script `scripts/verificar-demo.js` prueba, entre otras cosas:
 - `/salud-integracion` con el contrato del Anexo A;
 - login contra el SIA y validación del token;
 - 403 para cuentas sin acceso o sin rol SIGELAB;
+- **registro local con Gmail/WhatsApp, código de 4 dígitos, activación y login**;
+- **cuenta local solo lectura: no puede crear equipos (403)**;
+- **recuperación de contraseña con código y bloqueo de la contraseña anterior**;
 - código de activo duplicado → 400;
 - Técnico intentando dar de baja → 403;
 - Técnico cambiando estado → 200 + fila de historial;
 - borrar un ambiente con equipos → 409;
 - baja lógica y conservación del historial.
 
-Resultado esperado: **48 pruebas aprobadas, 0 fallidas**.
+Resultado esperado: **65 pruebas aprobadas, 0 fallidas**.
 
 ---
 
@@ -283,6 +377,8 @@ Resultado esperado: **48 pruebas aprobadas, 0 fallidas**.
 - [x] `README.md` con puerto, variables, cuentas y arranque.
 - [x] `.env.example` versionado, sin secretos reales.
 
+> **Nota sobre el contrato:** el módulo de cuentas locales es una extensión solicitada para el demo. La autenticación institucional del contrato sigue siendo el SIA; las cuentas locales se almacenan aparte (`sigelab_usuarios`) y no interfieren con `persona_id` ni con los permisos del SIA.
+
 ---
 
 ## 12. Estructura del proyecto
@@ -291,6 +387,8 @@ Resultado esperado: **48 pruebas aprobadas, 0 fallidas**.
 incos-sigelab-web/
 ├── public/                 Frontend (mismo origen, sin CORS)
 │   ├── login.html
+│   ├── registro.html      Crear cuenta + códigos Gmail/WhatsApp
+│   ├── recuperar.html     ¿Olvidaste tu contraseña?
 │   ├── index.html          Dashboard
 │   ├── inventario.html
 │   ├── equipos.html        Alta / edición
@@ -302,9 +400,9 @@ incos-sigelab-web/
 │   ├── server.js           Express
 │   ├── config.js
 │   ├── sia/client.js       Login, clave pública, validación JWT
-│   ├── middleware/auth.js  Autenticación y permisos
+│   ├── middleware/auth.js  Autenticación SIA + cuentas locales
 │   ├── routes/             auth, ambientes, equipos, personas, dashboard, auditoría, salud
-│   ├── services/           permisos, nombres
+│   ├── services/           permisos, nombres, localAuth, email, whatsapp, rateLimit
 │   ├── db/                 fileStore, firestore, seed
 │   └── utils/              respuesta, async, fecha
 ├── mock-sia/server.js      Núcleo SIA simulado (contrato v1)
@@ -315,6 +413,7 @@ incos-sigelab-web/
 ├── firestore.indexes.json  Índices de Firestore
 ├── serviceAccountKey.json  Credencial del backend (no se versiona)
 ├── data/store.json         Solo si DB_BACKEND=file
+├── data/local-jwt-secret   Secreto local de sesiones (no se versiona)
 ├── .env.example
 └── README.md
 ```
@@ -327,6 +426,11 @@ incos-sigelab-web/
 |---|---|---|
 | `SIN_CONEXION` al ingresar | El simulador o el SIA real no está en línea | Ejecutar `npm run mock-sia` o revisar `API_ACADEMICO_URL` |
 | `403 SIN_PERMISO` | La cuenta no tiene `SIGELAB` en `roles` | Usar 9000006, 9000007, 9000001 o 9000002 |
+| Cuenta local no puede crear equipos | Rol local `CONSULTA` (solo lectura) | Cambiar `rol` en `sigelab_usuarios` a `ADMINISTRATIVO` o `SERVICIO` y volver a ingresar |
+| No llega el código por Gmail | SMTP no configurado o contraseña de aplicación incorrecta | Completar `SMTP_*` y revisar la consola; en demo el código aparece en pantalla |
+| No llega el código por WhatsApp | `WHATSAPP_PROVIDER=demo` o sandbox sin unirse | Configurar Twilio/Meta o enviar `join ...` al sandbox |
+| `ESPERAR` al reenviar código | Límite de 60 segundos entre reenvíos | Esperar un minuto |
+| `CODIGO_EXPIRADO` | El código vence a los 10 minutos | Solicitar uno nuevo |
 | `401 TOKEN_INVALIDO` | Token vencido o clave distinta | Volver a ingresar |
 | `404 RUTA_NO_ENCONTRADA` | Ruta con tilde | Usar `/api/v1/auth/clave-publica` sin tilde |
 | El SIA real no resuelve | Dominio de Railway eliminado | Usar el simulador y reportarlo al equipo del SIA |

@@ -38,6 +38,38 @@ const config = {
 
   // Timeout de llamadas al SIA
   siaTimeoutMs: parseInt(process.env.SIA_TIMEOUT_MS || '8000', 10),
+
+  // ----------------------------------------------------------------
+  // Cuentas locales SIGELAB (modulo adicional al SIA)
+  // ----------------------------------------------------------------
+  // En modo demo el codigo de 4 digitos se muestra en pantalla y en
+  // la consola del servidor. Para envio real, configurar SMTP/WhatsApp
+  // y AUTH_DEMO_CODES=false.
+  authDemoCodes: String(process.env.AUTH_DEMO_CODES || 'true').toLowerCase() !== 'false',
+  authCodigoExpiraMs: 10 * 60 * 1000,
+  authCodigoMaxIntentos: 5,
+  authCodigoReenvioMs: 60 * 1000,
+  authCodigoMaxPorHora: 8,
+  localJwtExpira: process.env.JWT_LOCAL_EXPIRA || '8h',
+
+  smtp: {
+    host: process.env.SMTP_HOST || '',
+    port: parseInt(process.env.SMTP_PORT || '465', 10),
+    secure: String(process.env.SMTP_SECURE || 'true').toLowerCase() !== 'false',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || '',
+  },
+
+  whatsapp: {
+    provider: (process.env.WHATSAPP_PROVIDER || 'demo').toLowerCase(),
+    twilioSid: process.env.TWILIO_ACCOUNT_SID || '',
+    twilioToken: process.env.TWILIO_AUTH_TOKEN || '',
+    twilioFrom: process.env.TWILIO_WHATSAPP_FROM || '',
+    metaToken: process.env.META_WHATSAPP_TOKEN || '',
+    metaPhoneId: process.env.META_WHATSAPP_PHONE_NUMBER_ID || '',
+    metaVersion: process.env.META_WHATSAPP_API_VERSION || 'v20.0',
+  },
 };
 
 module.exports = config;

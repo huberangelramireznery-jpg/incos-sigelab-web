@@ -21,6 +21,8 @@ const COL = {
   auditoria: 'sigelab_auditoria',
   cachePersonas: 'sigelab_cache_personas',
   contadores: 'sigelab_contadores',
+  usuarios: 'sigelab_usuarios',
+  codigos: 'sigelab_codigos',
 };
 
 let admin = null;
@@ -447,6 +449,144 @@ async function getCachePersona(id) {
   return snap.exists ? docToObj(snap) : null;
 }
 
+// ------------------------------------------------------------------
+// Cuentas locales SIGELAB
+// ------------------------------------------------------------------
+
+async function getUsuarioLocalPorCorreo(correo) {
+  init();
+  const valor = String(correo || '').trim().toLowerCase();
+  if (!valor) return null;
+  const snap = await db.collection(COL.usuarios).where('correo', '==', valor).limit(1).get();
+  return snap.empty ? null : docToObj(snap.docs[0]);
+}
+
+async function getUsuarioLocalPorTelefono(telefono) {
+  init();
+  const valor = String(telefono || '').trim();
+  if (!valor) return null;
+  const snap = await db.collection(COL.usuarios).where('telefono', '==', valor).limit(1).get();
+  return snap.empty ? null : docToObj(snap.docs[0]);
+}
+
+async function getUsuarioLocal(id) {
+  init();
+  const snap = await db.collection(COL.usuarios).doc(String(id)).get();
+  return snap.exists ? docToObj(snap) : null;
+}
+
+async function createUsuarioLocal(datos) {
+  init();
+  const correo = String(datos.correo || '').trim().toLowerCase();
+  const telefono = String(datos.telefono || '').trim();
+
+  const dupCorreo = await db
+    .collection(COL.usuarios)
+    .where('correo', '==', correo)
+    .limit(1)
+    .get();
+  if (!dupCorreo.empty) {
+    throw new StoreError('REGISTRO_DUPLICADO', 'Ya existe una cuenta con ese correo.', 400);
+  }
+
+  if (telefono) {
+    const dupTelefono = await db
+      .collection(COL.usuarios)
+      .where('telefono', '==', telefono)
+      .limit(1)
+      .get();
+    if (!dupTelefono.empty) {
+      throw new StoreError('REGISTRO_DUPLICADO', 'Ya existe una cuenta con ese teléfono.', 400);
+    }
+  }
+
+  return db.runTransaction(async (tx) => {
+    const id = await nextIdTx(tx, COL.usuarios);
+    const item = {
+      nombre_completo: datos.nombre_completo,
+      correo,
+      telefono,
+      password_hash: datos.password_hash,
+      rol: datos.rol || 'CONSULTA',
+      persona_id: Number(datos.persona_id) || 1000000 + id,
+      activo: datos.activo === true,
+      correo_verificado: false,
+      telefono_verificado: false,
+      token_version: 0,
+      creado_en: ahora(),
+      actualizado_en: ahora(),
+      ultimo_acceso: null,
+    };
+    tx.set(db.collection(COL.usuarios).doc(String(id)), item);
+    return { id, ...item };
+  });
+}
+
+async function updateUsuarioLocal(id, cambios) {
+  init();
+  const ref = db.collection(COL.usuarios).doc(String(id));
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  const limpio = Object.assign({}, cambios, { actualizado_en: ahora() });
+  delete limpio.id;
+  await ref.set(limpio, { merge: true });
+  const actualizado = await ref.get();
+  return docToObj(actualizado);
+}
+
+// ------------------------------------------------------------------
+// Codigos de verificacion / recuperacion (uno activo por usuario+tipo+canal)
+// ------------------------------------------------------------------
+
+function claveCodigo(usuarioId, tipo, canal) {
+  return String(usuarioId) + ':' + String(tipo) + ':' + String(canal);
+}
+
+async function upsertCodigo(datos) {
+  init();
+  const clave = claveCodigo(datos.usuario_id, datos.tipo, datos.canal);
+  const item = {
+    usuario_id: Number(datos.usuario_id),
+    tipo: datos.tipo,
+    canal: datos.canal,
+    destino: datos.destino || '',
+    codigo_hash: datos.codigo_hash,
+    expira_en: datos.expira_en,
+    creado_en: ahora(),
+    usado_en: null,
+    intentos: 0,
+    envios: Number(datos.envios) || 1,
+    ultimo_envio_en: ahora(),
+  };
+  await db.collection(COL.codigos).doc(clave).set(item);
+  return { clave: clave, ...item };
+}
+
+async function getCodigo(usuarioId, tipo, canal) {
+  init();
+  const clave = claveCodigo(usuarioId, tipo, canal);
+  const snap = await db.collection(COL.codigos).doc(clave).get();
+  return snap.exists ? { clave: clave, ...snap.data() } : null;
+}
+
+async function updateCodigo(usuarioId, tipo, canal, cambios) {
+  init();
+  const clave = claveCodigo(usuarioId, tipo, canal);
+  const ref = db.collection(COL.codigos).doc(clave);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  await ref.set(cambios, { merge: true });
+  const actualizado = await ref.get();
+  return { clave: clave, ...actualizado.data() };
+}
+
+async function deleteCodigo(usuarioId, tipo, canal) {
+  init();
+  const clave = claveCodigo(usuarioId, tipo, canal);
+  await db.collection(COL.codigos).doc(clave).delete();
+  return { ok: true };
+}
+
 function maxId(lista) {
   return (lista || []).reduce((m, r) => Math.max(m, Number(r.id) || 0), 0);
 }
@@ -479,11 +619,28 @@ async function resetStore() {
     batch.set(db.collection(COL.cachePersonas).doc(String(p.persona_id)), p);
   }
 
+  // Las cuentas locales no se borran al recargar el seed. Conservar su
+  // contador y volver a crear su entrada de cache para historial/auditoria.
+  const usuariosSnap = await db.collection(COL.usuarios).get();
+  const maxUsuario = usuariosSnap.docs.reduce((m, d) => Math.max(m, Number(d.id) || 0), 0);
+  for (const doc of usuariosSnap.docs) {
+    const u = doc.data() || {};
+    if (!u.persona_id) continue;
+    batch.set(db.collection(COL.cachePersonas).doc(String(u.persona_id)), {
+      persona_id: Number(u.persona_id),
+      ci: '',
+      nombre_completo: u.nombre_completo || '',
+      cargo: 'Cuenta local SIGELAB',
+      actualizado_en: ahora(),
+    });
+  }
+
   batch.set(db.collection(COL.contadores).doc(COL.ambientes), { valor: maxId(seed.ambientes) });
   batch.set(db.collection(COL.contadores).doc(COL.equipos), { valor: maxId(seed.equipos) });
   batch.set(db.collection(COL.contadores).doc(COL.historial), { valor: maxId(seed.historial) });
   batch.set(db.collection(COL.contadores).doc(COL.auditoria), { valor: maxId(seed.auditoria) });
   batch.set(db.collection(COL.contadores).doc(COL.cachePersonas), { valor: 0 });
+  batch.set(db.collection(COL.contadores).doc(COL.usuarios), { valor: maxUsuario });
 
   await batch.commit();
   return { ok: true };
@@ -510,5 +667,14 @@ module.exports = {
   upsertCachePersona,
   listCachePersonas,
   getCachePersona,
+  getUsuarioLocalPorCorreo,
+  getUsuarioLocalPorTelefono,
+  getUsuarioLocal,
+  createUsuarioLocal,
+  updateUsuarioLocal,
+  upsertCodigo,
+  getCodigo,
+  updateCodigo,
+  deleteCodigo,
   resetStore,
 };

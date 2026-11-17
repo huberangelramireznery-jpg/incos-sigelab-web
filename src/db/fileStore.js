@@ -44,6 +44,8 @@ function inicializar() {
     sigelab_historial_estados: clone(seed.historial),
     sigelab_auditoria: clone(seed.auditoria),
     sigelab_cache_personas: clone(seed.cachePersonas),
+    sigelab_usuarios: [],
+    sigelab_codigos: [],
   };
   for (const col of Object.keys(estado)) {
     if (col === 'counters') continue;
@@ -369,11 +371,166 @@ async function getCachePersona(id) {
 }
 
 // ------------------------------------------------------------------
+// Cuentas locales SIGELAB
+// ------------------------------------------------------------------
+
+async function getUsuarioLocalPorCorreo(correo) {
+  const st = cargar();
+  const valor = String(correo || '').trim().toLowerCase();
+  if (!valor) return null;
+  const item = st.sigelab_usuarios.find((u) => u.correo === valor);
+  return item ? clone(item) : null;
+}
+
+async function getUsuarioLocalPorTelefono(telefono) {
+  const st = cargar();
+  const valor = String(telefono || '').trim();
+  if (!valor) return null;
+  const item = st.sigelab_usuarios.find((u) => u.telefono === valor);
+  return item ? clone(item) : null;
+}
+
+async function getUsuarioLocal(id) {
+  const st = cargar();
+  const item = st.sigelab_usuarios.find((u) => u.id === Number(id));
+  return item ? clone(item) : null;
+}
+
+async function createUsuarioLocal(datos) {
+  const st = cargar();
+  const correo = String(datos.correo || '').trim().toLowerCase();
+  const telefono = String(datos.telefono || '').trim();
+
+  if (st.sigelab_usuarios.some((u) => u.correo === correo)) {
+    throw new StoreError('REGISTRO_DUPLICADO', 'Ya existe una cuenta con ese correo.', 400);
+  }
+  if (telefono && st.sigelab_usuarios.some((u) => u.telefono === telefono)) {
+    throw new StoreError('REGISTRO_DUPLICADO', 'Ya existe una cuenta con ese teléfono.', 400);
+  }
+
+  const id = nextId(st, 'sigelab_usuarios');
+  const item = {
+    id,
+    nombre_completo: datos.nombre_completo,
+    correo,
+    telefono,
+    password_hash: datos.password_hash,
+    rol: datos.rol || 'CONSULTA',
+    persona_id: Number(datos.persona_id) || 1000000 + id,
+    activo: datos.activo === true,
+    correo_verificado: false,
+    telefono_verificado: false,
+    token_version: 0,
+    creado_en: ahora(),
+    actualizado_en: ahora(),
+    ultimo_acceso: null,
+  };
+  st.sigelab_usuarios.push(item);
+  guardar();
+  return clone(item);
+}
+
+async function updateUsuarioLocal(id, cambios) {
+  const st = cargar();
+  const item = st.sigelab_usuarios.find((u) => u.id === Number(id));
+  if (!item) return null;
+  const limpio = Object.assign({}, cambios, { actualizado_en: ahora() });
+  delete limpio.id;
+  Object.assign(item, limpio);
+  guardar();
+  return clone(item);
+}
+
+// ------------------------------------------------------------------
+// Codigos de verificacion / recuperacion
+// ------------------------------------------------------------------
+
+function claveCodigo(usuarioId, tipo, canal) {
+  return String(usuarioId) + ':' + String(tipo) + ':' + String(canal);
+}
+
+async function upsertCodigo(datos) {
+  const st = cargar();
+  const clave = claveCodigo(datos.usuario_id, datos.tipo, datos.canal);
+  const item = {
+    clave,
+    usuario_id: Number(datos.usuario_id),
+    tipo: datos.tipo,
+    canal: datos.canal,
+    destino: datos.destino || '',
+    codigo_hash: datos.codigo_hash,
+    expira_en: datos.expira_en,
+    creado_en: ahora(),
+    usado_en: null,
+    intentos: 0,
+    envios: Number(datos.envios) || 1,
+    ultimo_envio_en: ahora(),
+  };
+  const i = st.sigelab_codigos.findIndex((c) => c.clave === clave);
+  if (i >= 0) st.sigelab_codigos[i] = item;
+  else st.sigelab_codigos.push(item);
+  guardar();
+  return clone(item);
+}
+
+async function getCodigo(usuarioId, tipo, canal) {
+  const st = cargar();
+  const clave = claveCodigo(usuarioId, tipo, canal);
+  const item = st.sigelab_codigos.find((c) => c.clave === clave);
+  return item ? clone(item) : null;
+}
+
+async function updateCodigo(usuarioId, tipo, canal, cambios) {
+  const st = cargar();
+  const clave = claveCodigo(usuarioId, tipo, canal);
+  const item = st.sigelab_codigos.find((c) => c.clave === clave);
+  if (!item) return null;
+  Object.assign(item, cambios);
+  guardar();
+  return clone(item);
+}
+
+async function deleteCodigo(usuarioId, tipo, canal) {
+  const st = cargar();
+  const clave = claveCodigo(usuarioId, tipo, canal);
+  const i = st.sigelab_codigos.findIndex((c) => c.clave === clave);
+  if (i >= 0) st.sigelab_codigos.splice(i, 1);
+  guardar();
+  return { ok: true };
+}
+
+// ------------------------------------------------------------------
 // Utilidades de mantenimiento
 // ------------------------------------------------------------------
 
 async function resetStore() {
+  const previos = db
+    ? {
+        usuarios: clone(db.sigelab_usuarios || []),
+        codigos: clone(db.sigelab_codigos || []),
+      }
+    : { usuarios: [], codigos: [] };
+
   db = inicializar();
+  // Las cuentas locales y sus codigos NO se borran al recargar los datos
+  // de laboratorio. Asi el usuario conserva su cuenta entre seeds.
+  db.sigelab_usuarios = previos.usuarios;
+  db.sigelab_codigos = previos.codigos;
+  db.counters.sigelab_usuarios = maxId(previos.usuarios);
+
+  // Volver a crear la cache de nombres de las cuentas locales para que
+  // historial y auditoria muestren el nombre correcto.
+  for (const u of previos.usuarios) {
+    if (!u.persona_id) continue;
+    db.sigelab_cache_personas.push({
+      persona_id: Number(u.persona_id),
+      ci: '',
+      nombre_completo: u.nombre_completo || '',
+      cargo: 'Cuenta local SIGELAB',
+      actualizado_en: ahora(),
+    });
+  }
+
   guardar();
   return { ok: true };
 }
@@ -398,5 +555,14 @@ module.exports = {
   upsertCachePersona,
   listCachePersonas,
   getCachePersona,
+  getUsuarioLocalPorCorreo,
+  getUsuarioLocalPorTelefono,
+  getUsuarioLocal,
+  createUsuarioLocal,
+  updateUsuarioLocal,
+  upsertCodigo,
+  getCodigo,
+  updateCodigo,
+  deleteCodigo,
   resetStore,
 };
