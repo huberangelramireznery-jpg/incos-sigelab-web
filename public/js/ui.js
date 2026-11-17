@@ -52,6 +52,8 @@ function montarNavegacion(activo) {
   const cont = q('#topbar');
   if (!cont) return;
 
+  cont.className = 'topbar';
+
   const u = API.usuario() || {};
   const permisos = API.permisos() || {};
   const cargo = (permisos.cargos || []).join(', ');
