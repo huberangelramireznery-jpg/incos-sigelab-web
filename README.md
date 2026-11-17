@@ -129,9 +129,11 @@ Los códigos se muestran en pantalla y en la consola del servidor. No requiere c
 
 #### Envío real por Gmail
 
+> Coloque las credenciales reales en **`.env.local`** (ignorado por Git), no en `.env`, para no subirlas al repositorio.
+
 1. Activar la verificación en dos pasos de la cuenta Gmail.
 2. Crear una **contraseña de aplicación**: <https://myaccount.google.com/apppasswords>.
-3. Completar en `.env`:
+3. Completar en `.env.local`:
 
 ```env
 SMTP_HOST=smtp.gmail.com
@@ -145,6 +147,8 @@ AUTH_DEMO_CODES=false
 
 #### Envío real por WhatsApp con Twilio
 
+En `.env.local`:
+
 ```env
 WHATSAPP_PROVIDER=twilio
 TWILIO_ACCOUNT_SID=AC...
@@ -157,6 +161,8 @@ AUTH_DEMO_CODES=false
 - Para producción se necesita un número de WhatsApp aprobado.
 
 #### Alternativa: Meta WhatsApp Cloud API
+
+En `.env.local`:
 
 ```env
 WHATSAPP_PROVIDER=meta

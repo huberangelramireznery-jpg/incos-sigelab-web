@@ -1,7 +1,25 @@
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const dotenv = require('dotenv');
+
+const RAIZ = path.join(__dirname, '..');
+
+// Precedencia: variables del proceso > .env.local > .env
+// .env.local esta ignorado por Git y sirve para credenciales reales.
+const entornoProceso = { ...process.env };
+dotenv.config({ path: path.join(RAIZ, '.env') });
+
+const archivoLocal = path.join(RAIZ, '.env.local');
+if (fs.existsSync(archivoLocal)) {
+  const valoresLocales = dotenv.parse(fs.readFileSync(archivoLocal, 'utf8'));
+  for (const clave of Object.keys(valoresLocales)) {
+    if (entornoProceso[clave] === undefined) {
+      process.env[clave] = valoresLocales[clave];
+    }
+  }
+}
 
 /**
  * Configuracion central del demo SIGELAB-INCOS.
