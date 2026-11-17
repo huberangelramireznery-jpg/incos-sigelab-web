@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ambientes · SIGELAB-INCOS</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <header id="topbar"></header>
+
+  <main class="container">
+    <div id="siaStatus" class="status-strip"><span class="dot"></span><span>Consultando estado del núcleo…</span></div>
+
+    <div class="page-head">
+      <div>
+        <h1>Ambientes de laboratorio</h1>
+        <p class="sub">Registre las salas y asigne un responsable del SIA. Un ambiente con equipos no se puede dar de baja.</p>
+      </div>
+      <div class="row" id="acciones"></div>
+    </div>
+
+    <div id="alerta"></div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Nombre</th>
+            <th>Tipo</th>
+            <th>Capacidad</th>
+            <th>Equipos</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="7" class="empty">Cargando ambientes…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    (function () {
+      proteger();
+      montarNavegacion('ambientes');
+      montarEstadoSia();
+
+      const permisos = API.permisos() || {};
+      const TIPOS = ['LABORATORIO', 'DATACENTER', 'TALLER', 'OTRO'];
+      let ambientes = [];
+      let personas = [];
+
+      const tbody = document.getElementById('tbody');
+      const acciones = document.getElementById('acciones');
+
+      if (permisos.canManage) {
+        acciones.innerHTML = '<button class="btn btn-primary" id="btnNuevo" type="button">+ Nuevo ambiente</button>';
+        document.getElementById('btnNuevo').addEventListener('click', function () {
+          abrirFormulario(null);
+        });
+      } else {
+        acciones.innerHTML = '<span class="badge badge-info">Solo lectura</span>';
+      }
+
+      function opcionesResponsable(actual) {
+        let html = '<option value="">Sin responsable</option>';
+        html += personas.map(function (p) {
+          const id = p.id || p.persona_id;
+          const nombre = p.nombre_completo || ((p.nombres || '') + ' ' + (p.apellidos || '')).trim();
+          const cargo = Array.isArray(p.cargos) ? p.cargos.join(', ') : (p.cargo || '');
+          return '<option value="' + id + '"' + (Number(id) === Number(actual) ? ' selected' : '') + '>' +
+            esc(nombre + (cargo ? ' — ' + cargo : '')) + '</option>';
+        }).join('');
+        return html;
+      }
+
+      function formularioAmbiente(a) {
+        const esNuevo = !a;
+        return (
+          '<div class="form-grid">' +
+          '<div class="field"><label for="ambCodigo">Código *</label>' +
+          '<input class="form-control" id="ambCodigo" maxlength="20" value="' + esc(esNuevo ? '' : a.codigo) + '" placeholder="Ej. LAB-4" required></div>' +
+          '<div class="field"><label for="ambNombre">Nombre *</label>' +
+          '<input class="form-control" id="ambNombre" maxlength="80" value="' + esc(esNuevo ? '' : a.nombre) + '" placeholder="Ej. Laboratorio de Química" required></div>' +
+          '<div class="field"><label for="ambTipo">Tipo *</label>' +
+          '<select class="form-select" id="ambTipo">' + opcionesSelect(TIPOS, esNuevo ? 'LABORATORIO' : a.tipo) + '</select></div>' +
+          '<div class="field"><label for="ambCapacidad">Capacidad máxima</label>' +
+          '<input class="form-control" id="ambCapacidad" type="number" min="0" value="' + esc(esNuevo ? 20 : a.capacidad_maxima) + '"></div>' +
+          '<div class="field" style="grid-column:1/-1"><label for="ambResponsable">Responsable (persona del SIA)</label>' +
+          '<select class="form-select" id="ambResponsable">' + opcionesResponsable(esNuevo ? null : a.persona_responsable_id) + '</select>' +
+          '<div class="hint">Solo se guarda el persona_id. El nombre se toma del núcleo o de la caché de lectura.</div></div>' +
+          '</div>'
+        );
+      }
+
+      function abrirFormulario(a) {
+        const esNuevo = !a;
+        abrirModal({
+          titulo: esNuevo ? 'Nuevo ambiente' : 'Editar ambiente · ' + a.codigo,
+          html: formularioAmbiente(a),
+          textoConfirmar: esNuevo ? 'Crear ambiente' : 'Guardar cambios',
+          onConfirmar: async function (modal) {
+            const datos = {
+              codigo: modal.querySelector('#ambCodigo').value.trim(),
+              nombre: modal.querySelector('#ambNombre').value.trim(),
+              tipo: modal.querySelector('#ambTipo').value,
+              capacidad_maxima: Number(modal.querySelector('#ambCapacidad').value) || 0,
+              persona_responsable_id: modal.querySelector('#ambResponsable').value || null,
+            };
+            if (esNuevo) {
+              await API.pedir('/api/ambientes', { method: 'POST', body: datos });
+            } else {
+              await API.pedir('/api/ambientes/' + a.id, { method: 'PUT', body: datos });
+            }
+            await cargar();
+          },
+        });
+      }
+
+      function darDeBaja(a) {
+        abrirModal({
+          titulo: 'Dar de baja · ' + a.codigo,
+          peligro: true,
+          textoConfirmar: 'Dar de baja',
+          html:
+            '<p>El ambiente quedará <strong>inactivo</strong>. Si tiene equipos, la operación se rechaza con 409.</p>' +
+            '<p class="muted small">Equipos actuales: ' + a.equipos_total + '</p>',
+          onConfirmar: async function () {
+            await API.pedir('/api/ambientes/' + a.id, { method: 'DELETE' });
+            await cargar();
+          },
+        });
+      }
+
+      function fila(a) {
+        const accionesFila = [];
+        accionesFila.push('<a class="btn btn-outline btn-sm" href="/inventario.html?ambiente_id=' + a.id + '">Inventario</a>');
+        if (permisos.canManage) {
+          accionesFila.push('<button class="btn btn-outline btn-sm" type="button" data-editar="' + a.id + '">Editar</button>');
+          if (a.activo !== false) {
+            accionesFila.push('<button class="btn btn-danger btn-sm" type="button" data-baja="' + a.id + '">Dar de baja</button>');
+          }
+        }
+        return (
+          '<tr>' +
+          '<td><span class="code">' + esc(a.codigo) + '</span></td>' +
+          '<td>' + esc(a.nombre) + '</td>' +
+          '<td>' + tipoBadge(a.tipo) + '</td>' +
+          '<td>' + (a.capacidad_maxima || 0) + '</td>' +
+          '<td>' + a.equipos_total + ' <span class="muted small">(' + a.equipos_activos + ' activos)</span></td>' +
+          '<td>' + (a.activo === false ? '<span class="badge badge-danger">INACTIVO</span>' : '<span class="badge badge-ok">ACTIVO</span>') + '</td>' +
+          '<td><div class="actions">' + accionesFila.join('') + '</div></td>' +
+          '</tr>'
+        );
+      }
+
+      async function cargar() {
+        limpiarAlerta('#alerta');
+        try {
+          ambientes = await API.pedir('/api/ambientes');
+          tbody.innerHTML = ambientes.length
+            ? ambientes.map(fila).join('')
+            : '<tr><td colspan="7" class="empty">No hay ambientes registrados.</td></tr>';
+        } catch (e) {
+          mostrarAlerta('#alerta', e.message, 'danger');
+          tbody.innerHTML = '<tr><td colspan="7" class="empty">No se pudieron cargar los ambientes.</td></tr>';
+        }
+      }
+
+      tbody.addEventListener('click', function (ev) {
+        const btnEditar = ev.target.closest('[data-editar]');
+        if (btnEditar) {
+          const a = ambientes.find(function (x) { return x.id === Number(btnEditar.getAttribute('data-editar')); });
+          if (a) abrirFormulario(a);
+          return;
+        }
+        const btnBaja = ev.target.closest('[data-baja]');
+        if (btnBaja) {
+          const a = ambientes.find(function (x) { return x.id === Number(btnBaja.getAttribute('data-baja')); });
+          if (a) darDeBaja(a);
+        }
+      });
+
+      (async function init() {
+        try {
+          personas = await API.pedir('/api/personas?tipo=ADMINISTRATIVO');
+        } catch (e) {
+          personas = [];
+        }
+        await cargar();
+      })();
+    })();
+  </script>
+</body>
+</html>

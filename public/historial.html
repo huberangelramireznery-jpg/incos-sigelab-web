@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Historial · SIGELAB-INCOS</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <header id="topbar"></header>
+
+  <main class="container">
+    <div id="siaStatus" class="status-strip"><span class="dot"></span><span>Consultando estado del núcleo…</span></div>
+
+    <div class="page-head">
+      <div>
+        <h1 id="titulo">Historial de estados</h1>
+        <p class="sub" id="subtitulo">Cada cambio de estado genera una fila que nunca se edita.</p>
+      </div>
+      <a class="btn btn-outline" href="/inventario.html">Volver al inventario</a>
+    </div>
+
+    <div id="alerta"></div>
+
+    <section id="detalle" class="card mb-2 hidden"></section>
+
+    <div id="selector" class="hidden">
+      <div class="table-wrap mt-2">
+        <table class="table">
+          <thead>
+            <tr><th>Código</th><th>Tipo</th><th>Ambiente</th><th>Estado</th><th>Historial</th></tr>
+          </thead>
+          <tbody id="tbodyEquipos">
+            <tr><td colspan="5" class="empty">Cargando equipos…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="historialCont" class="hidden">
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Fecha y hora</th>
+              <th>Estado anterior</th>
+              <th>Estado nuevo</th>
+              <th>Observación</th>
+              <th>Registrado por</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyHistorial">
+            <tr><td colspan="5" class="empty">Cargando historial…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    (function () {
+      proteger();
+      montarNavegacion('inventario');
+      montarEstadoSia();
+
+      const idEquipo = new URLSearchParams(location.search).get('equipo_id');
+
+      function nombrePersona(h) {
+        return h.persona_nombre ? esc(h.persona_nombre) : 'Persona #' + esc(h.persona_id);
+      }
+
+      function pintarDetalle(eq) {
+        const cont = document.getElementById('detalle');
+        cont.classList.remove('hidden');
+        cont.innerHTML =
+          '<div class="card-title">' + esc(eq.codigo_activo) + ' ' + estadoBadge(eq.estado) + '</div>' +
+          '<dl class="kv">' +
+          '<dt>Tipo</dt><dd>' + esc(eq.tipo) + '</dd>' +
+          '<dt>Marca / Modelo</dt><dd>' + esc((eq.marca || '') + ' ' + (eq.modelo || '')) + '</dd>' +
+          '<dt>Ambiente</dt><dd>' + esc((eq.ambiente_codigo || '') + ' · ' + (eq.ambiente_nombre || '')) + '</dd>' +
+          '<dt>Características</dt><dd>' + esc(eq.caracteristicas || '—') + '</dd>' +
+          '<dt>Fecha de alta</dt><dd>' + esc(eq.fecha_alta || '—') + '</dd>' +
+          '<dt>Baja lógica</dt><dd>' + (eq.eliminado_en ? esc(fmtFecha(eq.eliminado_en)) : 'No') + '</dd>' +
+          '</dl>';
+      }
+
+      function filaHistorial(h) {
+        return (
+          '<tr>' +
+          '<td>' + esc(fmtFecha(h.fecha_hora)) + '</td>' +
+          '<td>' + estadoBadge(h.estado_anterior) + '</td>' +
+          '<td>' + estadoBadge(h.estado_nuevo) + '</td>' +
+          '<td>' + esc(h.observacion || '—') + '</td>' +
+          '<td>' + nombrePersona(h) + '<div class="muted small">persona_id: ' + esc(h.persona_id) + '</div></td>' +
+          '</tr>'
+        );
+      }
+
+      async function cargarHistorial() {
+        try {
+          const datos = await API.pedir('/api/equipos/' + idEquipo + '/historial');
+          document.getElementById('titulo').textContent = 'Historial · ' + datos.equipo.codigo_activo;
+          document.getElementById('subtitulo').textContent = 'Trazabilidad completa de los cambios de estado.';
+          pintarDetalle(datos.equipo);
+
+          document.getElementById('historialCont').classList.remove('hidden');
+          const tbody = document.getElementById('tbodyHistorial');
+          tbody.innerHTML = datos.historial.length
+            ? datos.historial.map(filaHistorial).join('')
+            : '<tr><td colspan="5" class="empty">Este equipo aún no tiene cambios de estado registrados.</td></tr>';
+        } catch (e) {
+          mostrarAlerta('#alerta', e.message, 'danger');
+        }
+      }
+
+      async function cargarSelector() {
+        document.getElementById('selector').classList.remove('hidden');
+        try {
+          const equipos = await API.pedir('/api/equipos');
+          const tbody = document.getElementById('tbodyEquipos');
+          tbody.innerHTML = equipos.length
+            ? equipos.map(function (e) {
+                return (
+                  '<tr>' +
+                  '<td><span class="code">' + esc(e.codigo_activo) + '</span></td>' +
+                  '<td>' + tipoBadge(e.tipo) + '</td>' +
+                  '<td>' + esc(e.ambiente_codigo || '') + '</td>' +
+                  '<td>' + estadoBadge(e.estado) + '</td>' +
+                  '<td><a class="btn btn-outline btn-sm" href="/historial.html?equipo_id=' + e.id + '">Ver historial</a></td>' +
+                  '</tr>'
+                );
+              }).join('')
+            : '<tr><td colspan="5" class="empty">No hay equipos registrados.</td></tr>';
+        } catch (e) {
+          mostrarAlerta('#alerta', e.message, 'danger');
+        }
+      }
+
+      if (idEquipo) {
+        cargarHistorial();
+      } else {
+        document.getElementById('titulo').textContent = 'Historial de estados';
+        document.getElementById('subtitulo').textContent = 'Seleccione un equipo para ver sus cambios de estado.';
+        cargarSelector();
+      }
+    })();
+  </script>
+</body>
+</html>

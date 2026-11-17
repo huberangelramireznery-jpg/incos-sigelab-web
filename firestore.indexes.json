@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "sigelab_equipos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ambiente_id", "order": "ASCENDING" },
+        { "fieldPath": "estado", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sigelab_historial_estados",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "equipo_id", "order": "ASCENDING" },
+        { "fieldPath": "fecha_hora", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

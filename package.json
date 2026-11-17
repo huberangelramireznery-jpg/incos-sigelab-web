@@ -1,0 +1,30 @@
+{
+  "name": "incos-sigelab-web",
+  "version": "1.0.0",
+  "description": "SIGELAB-INCOS - Laboratorios, ambientes e inventario de equipos. Demo conforme al Contrato de Conformidad v1.1.0 del ecosistema INCOS-BENI.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node scripts/start.js",
+    "start:app": "node src/server.js",
+    "demo": "node scripts/start.js",
+    "dev": "node --watch src/server.js",
+    "mock-sia": "node mock-sia/server.js",
+    "seed": "node src/db/seed.js",
+    "verify": "node scripts/verificar-demo.js"
+  },
+  "keywords": [
+    "sigelab",
+    "incos",
+    "laboratorios",
+    "inventario",
+    "sia"
+  ],
+  "author": "Equipo SIGELAB-INCOS",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "firebase-admin": "^13.0.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

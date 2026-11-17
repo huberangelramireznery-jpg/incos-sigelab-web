@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Equipo · SIGELAB-INCOS</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <header id="topbar"></header>
+
+  <main class="container">
+    <div id="siaStatus" class="status-strip"><span class="dot"></span><span>Consultando estado del núcleo…</span></div>
+
+    <div class="page-head">
+      <div>
+        <h1 id="titulo">Registrar equipo</h1>
+        <p class="sub" id="subtitulo">Complete los datos del equipo y seleccione su ambiente.</p>
+      </div>
+      <a class="btn btn-outline" href="/inventario.html">Volver al inventario</a>
+    </div>
+
+    <div id="alerta"></div>
+
+    <section class="card pad-lg" style="max-width:900px">
+      <form id="formEquipo">
+        <div class="form-grid">
+          <div class="field">
+            <label for="ambiente_id">Ambiente *</label>
+            <select class="form-select" id="ambiente_id" required></select>
+            <div class="hint">Se elige de la lista; no se escribe el ID a mano.</div>
+          </div>
+          <div class="field">
+            <label for="codigo_activo">Código de activo *</label>
+            <input class="form-control" id="codigo_activo" maxlength="40" placeholder="Ej. LAB1-PC-007" required />
+            <div class="hint">Único en todo el sistema. Si ya existe, la API responde 400.</div>
+          </div>
+          <div class="field">
+            <label for="tipo">Tipo *</label>
+            <select class="form-select" id="tipo" required></select>
+          </div>
+          <div class="field">
+            <label for="fecha_alta">Fecha de alta</label>
+            <input class="form-control" id="fecha_alta" type="date" />
+          </div>
+          <div class="field">
+            <label for="marca">Marca *</label>
+            <input class="form-control" id="marca" maxlength="60" placeholder="Ej. Dell" required />
+          </div>
+          <div class="field">
+            <label for="modelo">Modelo *</label>
+            <input class="form-control" id="modelo" maxlength="80" placeholder="Ej. OptiPlex 7090" required />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="caracteristicas">Características</label>
+          <textarea class="form-control" id="caracteristicas" placeholder="RAM, disco, procesador u otras observaciones"></textarea>
+        </div>
+
+        <div class="field" id="campoEstado">
+          <label for="estado">Estado inicial</label>
+          <select class="form-select" id="estado">
+            <option value="OPERATIVO">Operativo</option>
+            <option value="EN_MANTENIMIENTO">En mantenimiento</option>
+          </select>
+          <div class="hint">Después del alta, el estado se cambia desde el inventario y queda en el historial.</div>
+        </div>
+
+        <div id="estadoActual" class="hidden">
+          <div class="field">
+            <label>Estado actual</label>
+            <div id="estadoBadge"></div>
+            <div class="hint">Para cambiar el estado use la acción “Cambiar estado” en el inventario. Así queda registrado en el historial.</div>
+          </div>
+        </div>
+
+        <div class="row mt-2">
+          <button class="btn btn-primary" id="btnGuardar" type="submit">Guardar equipo</button>
+          <a class="btn btn-outline" href="/inventario.html">Cancelar</a>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    (function () {
+      proteger();
+      montarNavegacion('equipos');
+      montarEstadoSia();
+
+      const permisos = API.permisos() || {};
+      const params = new URLSearchParams(location.search);
+      const idEquipo = params.get('id');
+
+      const form = document.getElementById('formEquipo');
+      const selAmbiente = document.getElementById('ambiente_id');
+      const selTipo = document.getElementById('tipo');
+      const selEstado = document.getElementById('estado');
+
+      if (!permisos.canManage) {
+        mostrarAlerta('#alerta', 'Solo el Encargado de Laboratorios puede registrar o editar equipos.', 'warn');
+        document.getElementById('btnGuardar').disabled = true;
+      }
+
+      function pintarAmbientes(lista, actual) {
+        const activos = lista.filter(function (a) { return a.activo !== false || a.id === actual; });
+        selAmbiente.innerHTML = '<option value="">Seleccione un ambiente…</option>' +
+          activos.map(function (a) {
+            return '<option value="' + a.id + '"' + (a.id === actual ? ' selected' : '') + '>' +
+              esc(a.codigo + ' · ' + a.nombre) + (a.activo === false ? ' (inactivo)' : '') + '</option>';
+          }).join('');
+      }
+
+      function pintarTipos(actual) {
+        const tipos = (window.__catalogos && window.__catalogos.tipos_equipo) || [];
+        selTipo.innerHTML = '<option value="">Seleccione…</option>' +
+          tipos.map(function (t) {
+            return '<option value="' + esc(t) + '"' + (t === actual ? ' selected' : '') + '>' +
+              esc(String(t).replace(/_/g, ' ')) + '</option>';
+          }).join('');
+      }
+
+      async function init() {
+        try {
+          const resultados = await Promise.all([
+            API.pedir('/api/equipos/catalogos'),
+            API.pedir('/api/ambientes'),
+          ]);
+          window.__catalogos = resultados[0];
+          const ambientes = resultados[1];
+
+          if (idEquipo) {
+            const eq = await API.pedir('/api/equipos/' + idEquipo);
+            document.getElementById('titulo').textContent = 'Editar equipo';
+            document.getElementById('subtitulo').textContent = eq.codigo_activo + ' · ' + (eq.ambiente_nombre || '');
+            document.getElementById('campoEstado').classList.add('hidden');
+            document.getElementById('estadoActual').classList.remove('hidden');
+            document.getElementById('estadoBadge').innerHTML = estadoBadge(eq.estado);
+
+            pintarAmbientes(ambientes, eq.ambiente_id);
+            pintarTipos(eq.tipo);
+
+            document.getElementById('codigo_activo').value = eq.codigo_activo || '';
+            document.getElementById('marca').value = eq.marca || '';
+            document.getElementById('modelo').value = eq.modelo || '';
+            document.getElementById('caracteristicas').value = eq.caracteristicas || '';
+            document.getElementById('fecha_alta').value = eq.fecha_alta || '';
+          } else {
+            pintarAmbientes(ambientes, null);
+            pintarTipos('');
+            document.getElementById('fecha_alta').value = new Date().toISOString().slice(0, 10);
+          }
+        } catch (e) {
+          mostrarAlerta('#alerta', e.message, 'danger');
+        }
+      }
+
+      form.addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        limpiarAlerta('#alerta');
+
+        const boton = document.getElementById('btnGuardar');
+        boton.disabled = true;
+        boton.textContent = 'Guardando…';
+
+        const datos = {
+          ambiente_id: Number(selAmbiente.value),
+          codigo_activo: document.getElementById('codigo_activo').value.trim(),
+          tipo: selTipo.value,
+          marca: document.getElementById('marca').value.trim(),
+          modelo: document.getElementById('modelo').value.trim(),
+          caracteristicas: document.getElementById('caracteristicas').value.trim(),
+          fecha_alta: document.getElementById('fecha_alta').value || undefined,
+        };
+
+        try {
+          if (idEquipo) {
+            await API.pedir('/api/equipos/' + idEquipo, { method: 'PUT', body: datos });
+          } else {
+            datos.estado = selEstado.value;
+            await API.pedir('/api/equipos', { method: 'POST', body: datos });
+          }
+          location.href = '/inventario.html';
+        } catch (e) {
+          mostrarAlerta('#alerta', e.message, 'danger');
+          boton.disabled = false;
+          boton.textContent = 'Guardar equipo';
+        }
+      });
+
+      init();
+    })();
+  </script>
+</body>
+</html>

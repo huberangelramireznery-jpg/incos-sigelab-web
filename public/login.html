@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ingreso · SIGELAB-INCOS</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <section class="login-brand">
+      <div>
+        <span class="pill"><span class="dot" style="width:9px;height:9px;border-radius:50%;background:#5eead4;display:inline-block"></span> Ecosistema INCOS-BENI</span>
+        <h1>SIGELAB</h1>
+        <p>Laboratorios, ambientes e inventario de equipos del Instituto Técnico INCOS-BENI.</p>
+        <div class="mt-3">
+          <p class="small" style="opacity:.9;margin-bottom:6px">✓ Registro de ambientes y equipos</p>
+          <p class="small" style="opacity:.9;margin-bottom:6px">✓ Inventario con estados y filtros</p>
+          <p class="small" style="opacity:.9;margin-bottom:6px">✓ Historial de cambios por equipo</p>
+          <p class="small" style="opacity:.9;margin-bottom:0">✓ Identidad centralizada en el SIA</p>
+        </div>
+      </div>
+      <div class="small" style="opacity:.85">
+        <div>Núcleo SIA: <span id="siaUrl">configurando…</span></div>
+        <div class="mt-1"><a href="/salud-integracion" target="_blank" style="color:#d7f5f1">Ver diagnóstico de integración</a></div>
+      </div>
+    </section>
+
+    <section class="login-panel">
+      <div class="login-card">
+        <h2>Iniciar sesión</h2>
+        <p class="lead">Ingrese con su cédula o correo institucional. La contraseña la valida el núcleo SIA.</p>
+
+        <div id="loginError"></div>
+
+        <form id="loginForm" autocomplete="on">
+          <div class="field">
+            <label for="identificador">Cédula o correo</label>
+            <input class="form-control" id="identificador" name="identificador" type="text" placeholder="Ej. 9000006" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="clave">Contraseña</label>
+            <input class="form-control" id="clave" name="clave" type="password" placeholder="Contraseña" autocomplete="current-password" required />
+          </div>
+          <button class="btn btn-primary btn-block" id="btnIngresar" type="submit">Ingresar</button>
+        </form>
+
+        <details class="demo-accounts">
+          <summary>Cuentas de demostración</summary>
+          <div class="demo-list" id="demoList"></div>
+          <p class="hint">Contraseña única: <strong>Demo2026*</strong>. Datos ficticios del Anexo B.</p>
+        </details>
+
+        <p class="login-foot">SIGELAB-INCOS · Demo conforme al Contrato de Conformidad v1.1.0</p>
+      </div>
+    </section>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    (function () {
+      const CUENTAS = [
+        { ci: '9000006', nombre: 'Luis Añez', rol: 'Encargado de Laboratorios', permiso: 'Todo' },
+        { ci: '9000007', nombre: 'Patricia Gutiérrez', rol: 'Técnico de Laboratorio', permiso: 'Cambiar estado' },
+        { ci: '9000001', nombre: 'Ana María Rojas', rol: 'Rector', permiso: 'Solo lectura' },
+        { ci: '9000005', nombre: 'Juan Pablo Quiroga', rol: 'Sin acceso', permiso: 'Caso 403' }
+      ];
+
+      const lista = document.getElementById('demoList');
+      lista.innerHTML = CUENTAS.map(function (c) {
+        return '<div class="demo-item"><span><strong>' + c.ci + '</strong> · ' + c.nombre +
+          '<br><span class="muted">' + c.rol + ' — ' + c.permiso + '</span></span>' +
+          '<button type="button" data-ci="' + c.ci + '">usar</button></div>';
+      }).join('');
+
+      lista.addEventListener('click', function (ev) {
+        const btn = ev.target.closest('button[data-ci]');
+        if (!btn) return;
+        document.getElementById('identificador').value = btn.getAttribute('data-ci');
+        document.getElementById('clave').value = 'Demo2026*';
+        document.getElementById('clave').focus();
+      });
+
+      API.pedir('/api/auth/config')
+        .then(function (cfg) {
+          document.getElementById('siaUrl').textContent = cfg.siaUrl || '—';
+        })
+        .catch(function () {
+          document.getElementById('siaUrl').textContent = 'no disponible';
+        });
+
+      const MENSAJES = {
+        NO_AUTENTICADO: 'Cédula/correo o contraseña incorrectos.',
+        SIN_PERMISO: 'Esta cuenta no tiene acceso al sistema SIGELAB.',
+        CUENTA_INACTIVA: 'La cuenta está inactiva.',
+        PERSONA_INACTIVA: 'La persona está inactiva.',
+        SIN_CONEXION: 'No se pudo conectar con el núcleo SIA. Intente más tarde.',
+        DEMASIADOS_INTENTOS: 'Demasiados intentos. Espere unos minutos antes de reintentar.',
+        DATOS_INVALIDOS: 'Complete la cédula/correo y la contraseña.'
+      };
+
+      document.getElementById('loginForm').addEventListener('submit', async function (ev) {
+        ev.preventDefault();
+        const errorBox = document.getElementById('loginError');
+        errorBox.innerHTML = '';
+        const boton = document.getElementById('btnIngresar');
+        const identificador = document.getElementById('identificador').value.trim();
+        const clave = document.getElementById('clave').value;
+
+        if (!identificador || !clave) {
+          errorBox.innerHTML = '<div class="alert alert-danger">Complete la cédula/correo y la contraseña.</div>';
+          return;
+        }
+
+        boton.disabled = true;
+        boton.textContent = 'Ingresando…';
+
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identificador: identificador, clave: clave })
+          });
+          const json = await res.json().catch(function () { return null; });
+
+          if (!res.ok || !json || json.exito === false) {
+            const codigo = json && json.error && json.error.codigo;
+            const mensaje = (json && json.error && json.error.mensaje) || MENSAJES[codigo] || 'No fue posible iniciar sesión.';
+            errorBox.innerHTML = '<div class="alert alert-danger">' + mensaje + '</div>';
+            return;
+          }
+
+          API.guardar(json.datos);
+          location.replace('/index.html');
+        } catch (e) {
+          errorBox.innerHTML = '<div class="alert alert-danger">' +
+            (e.codigo && MENSAJES[e.codigo] ? MENSAJES[e.codigo] : 'No se pudo conectar con el servidor del demo.') +
+            '</div>';
+        } finally {
+          boton.disabled = false;
+          boton.textContent = 'Ingresar';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

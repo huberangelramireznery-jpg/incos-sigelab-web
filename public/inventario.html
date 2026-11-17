@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inventario · SIGELAB-INCOS</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <header id="topbar"></header>
+
+  <main class="container">
+    <div id="siaStatus" class="status-strip"><span class="dot"></span><span>Consultando estado del núcleo…</span></div>
+
+    <div class="page-head">
+      <div>
+        <h1>Inventario de equipos</h1>
+        <p class="sub">Consulte, filtre y actualice el estado operativo de cada equipo.</p>
+      </div>
+      <div class="row" id="acciones"></div>
+    </div>
+
+    <div id="alerta"></div>
+
+    <section class="card mb-2">
+      <div class="filters">
+        <div class="field">
+          <label for="fAmbiente">Ambiente</label>
+          <select class="form-select" id="fAmbiente"><option value="">Todos</option></select>
+        </div>
+        <div class="field">
+          <label for="fEstado">Estado</label>
+          <select class="form-select" id="fEstado">
+            <option value="">Todos</option>
+            <option value="OPERATIVO">Operativo</option>
+            <option value="EN_MANTENIMIENTO">En mantenimiento</option>
+            <option value="DE_BAJA">De baja</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fTipo">Tipo</label>
+          <select class="form-select" id="fTipo"><option value="">Todos</option></select>
+        </div>
+        <div class="field" style="min-width:220px;flex:1">
+          <label for="fTexto">Buscar</label>
+          <input class="form-control" id="fTexto" type="search" placeholder="Código, marca, modelo…" />
+        </div>
+        <div class="field">
+          <label style="display:flex;gap:7px;align-items:center;margin-top:22px;cursor:pointer">
+            <input type="checkbox" id="fIncluirBaja" checked /> Incluir dados de baja
+          </label>
+        </div>
+        <button class="btn btn-primary" id="btnFiltrar" type="button">Filtrar</button>
+        <button class="btn btn-outline" id="btnLimpiar" type="button">Limpiar</button>
+      </div>
+    </section>
+
+    <div class="row mb-1">
+      <span class="muted small" id="contador">Cargando…</span>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Tipo</th>
+            <th>Marca / Modelo</th>
+            <th>Ambiente</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="6" class="empty">Cargando inventario…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    (function () {
+      proteger();
+      montarNavegacion('inventario');
+      montarEstadoSia();
+
+      const permisos = API.permisos() || {};
+      let equipos = [];
+      let ambientes = [];
+      let catalogos = { tipos_equipo: [] };
+
+      const acciones = document.getElementById('acciones');
+      acciones.innerHTML = permisos.canManage
+        ? '<a class="btn btn-primary" href="/equipos.html">+ Registrar equipo</a>'
+        : '<span class="badge badge-info">' + (permisos.canChangeState ? 'Puede cambiar estados' : 'Solo lectura') + '</span>';
+
+      const selAmbiente = document.getElementById('fAmbiente');
+      const selEstado = document.getElementById('fEstado');
+      const selTipo = document.getElementById('fTipo');
+      const txt = document.getElementById('fTexto');
+      const chkBaja = document.getElementById('fIncluirBaja');
+      const tbody = document.getElementById('tbody');
+
+      function pintarAmbientes() {
+        selAmbiente.innerHTML = '<option value="">Todos</option>' +
+          ambientes.map(function (a) {
+            return '<option value="' + a.id + '">' + esc(a.codigo + ' · ' + a.nombre) + '</option>';
+          }).join('');
+      }
+
+      function pintarTipos() {
+        selTipo.innerHTML = '<option value="">Todos</option>' +
+          (catalogos.tipos_equipo || []).map(function (t) {
+            return '<option value="' + esc(t) + '">' + esc(String(t).replace(/_/g, ' ')) + '</option>';
+          }).join('');
+      }
+
+      function fila(e) {
+        const accionesFila = [];
+        accionesFila.push('<a class="btn btn-outline btn-sm" href="/historial.html?equipo_id=' + e.id + '">Historial</a>');
+        if (permisos.canChangeState && e.estado !== 'DE_BAJA') {
+          accionesFila.push('<button class="btn btn-outline btn-sm" type="button" data-estado="' + e.id + '">Cambiar estado</button>');
+        }
+        if (permisos.canManage) {
+          accionesFila.push('<a class="btn btn-outline btn-sm" href="/equipos.html?id=' + e.id + '">Editar</a>');
+        }
+        if (permisos.canManage && e.estado !== 'DE_BAJA') {
+          accionesFila.push('<button class="btn btn-danger btn-sm" type="button" data-baja="' + e.id + '">Dar de baja</button>');
+        }
+
+        return (
+          '<tr>' +
+          '<td><span class="code">' + esc(e.codigo_activo) + '</span></td>' +
+          '<td>' + tipoBadge(e.tipo) + '</td>' +
+          '<td>' + esc(e.marca || '') + ' ' + esc(e.modelo || '') +
+          (e.caracteristicas ? '<div class="muted small">' + esc(e.caracteristicas) + '</div>' : '') + '</td>' +
+          '<td>' + esc(e.ambiente_codigo || '') + '<div class="muted small">' + esc(e.ambiente_nombre || '') + '</div></td>' +
+          '<td>' + estadoBadge(e.estado) + '</td>' +
+          '<td><div class="actions">' + accionesFila.join('') + '</div></td>' +
+          '</tr>'
+        );
+      }
+
+      function pintar() {
+        document.getElementById('contador').textContent = equipos.length + ' equipo(s) encontrado(s).';
+        if (!equipos.length) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty">No hay equipos que coincidan con los filtros.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = equipos.map(fila).join('');
+      }
+
+      async function cargarEquipos() {
+        const p = new URLSearchParams();
+        if (selAmbiente.value) p.set('ambiente_id', selAmbiente.value);
+        if (selEstado.value) p.set('estado', selEstado.value);
+        if (selTipo.value) p.set('tipo', selTipo.value);
+        if (txt.value.trim()) p.set('q', txt.value.trim());
+        if (!chkBaja.checked) p.set('incluir_baja', 'false');
+
+        limpiarAlerta('#alerta');
+        try {
+          equipos = await API.pedir('/api/equipos?' + p.toString());
+          pintar();
+        } catch (e) {
+          mostrarAlerta('#alerta', e.message, 'danger');
+        }
+      }
+
+      function cambiarEstado(id) {
+        const eq = equipos.find(function (x) { return x.id === id; });
+        if (!eq) return;
+        const disponibles = ['OPERATIVO', 'EN_MANTENIMIENTO'].filter(function (s) { return s !== eq.estado; });
+
+        abrirModal({
+          titulo: 'Cambiar estado · ' + eq.codigo_activo,
+          html:
+            '<div class="field"><label>Estado actual</label><div>' + estadoBadge(eq.estado) + '</div></div>' +
+            '<div class="field"><label for="nuevoEstado">Nuevo estado</label>' +
+            '<select class="form-select" id="nuevoEstado">' + opcionesSelect(disponibles) + '</select></div>' +
+            '<div class="field"><label for="obsEstado">Observación</label>' +
+            '<textarea class="form-control" id="obsEstado" placeholder="Motivo del cambio (opcional)"></textarea></div>',
+          textoConfirmar: 'Guardar cambio',
+          onConfirmar: async function (modal) {
+            await API.pedir('/api/equipos/' + id + '/estado', {
+              method: 'POST',
+              body: {
+                estado_nuevo: modal.querySelector('#nuevoEstado').value,
+                observacion: modal.querySelector('#obsEstado').value.trim(),
+              },
+            });
+            await cargarEquipos();
+          },
+        });
+      }
+
+      function darDeBaja(id) {
+        const eq = equipos.find(function (x) { return x.id === id; });
+        if (!eq) return;
+
+        abrirModal({
+          titulo: 'Dar de baja · ' + eq.codigo_activo,
+          peligro: true,
+          textoConfirmar: 'Dar de baja',
+          html:
+            '<p>El equipo pasará al estado <strong>DE_BAJA</strong> mediante borrado lógico. ' +
+            'Conserva su historial y su código no podrá reutilizarse.</p>' +
+            '<div class="field"><label for="obsBaja">Observación</label>' +
+            '<textarea class="form-control" id="obsBaja" placeholder="Motivo de la baja"></textarea></div>',
+          onConfirmar: async function (modal) {
+            await API.pedir('/api/equipos/' + id, {
+              method: 'DELETE',
+              body: { observacion: modal.querySelector('#obsBaja').value.trim() },
+            });
+            await cargarEquipos();
+          },
+        });
+      }
+
+      tbody.addEventListener('click', function (ev) {
+        const btnEstado = ev.target.closest('[data-estado]');
+        if (btnEstado) { cambiarEstado(Number(btnEstado.getAttribute('data-estado'))); return; }
+        const btnBaja = ev.target.closest('[data-baja]');
+        if (btnBaja) { darDeBaja(Number(btnBaja.getAttribute('data-baja'))); }
+      });
+
+      document.getElementById('btnFiltrar').addEventListener('click', cargarEquipos);
+      document.getElementById('btnLimpiar').addEventListener('click', function () {
+        selAmbiente.value = '';
+        selEstado.value = '';
+        selTipo.value = '';
+        txt.value = '';
+        chkBaja.checked = true;
+        cargarEquipos();
+      });
+      txt.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); cargarEquipos(); }
+      });
+
+      (async function init() {
+        try {
+          const resultados = await Promise.all([
+            API.pedir('/api/equipos/catalogos'),
+            API.pedir('/api/ambientes'),
+          ]);
+          catalogos = resultados[0];
+          ambientes = resultados[1];
+          pintarAmbientes();
+          pintarTipos();
+
+          const params = new URLSearchParams(location.search);
+          if (params.get('ambiente_id')) selAmbiente.value = params.get('ambiente_id');
+          if (params.get('estado')) selEstado.value = params.get('estado');
+
+          await cargarEquipos();
+        } catch (e) {
+          mostrarAlerta('#alerta', e.message, 'danger');
+          tbody.innerHTML = '<tr><td colspan="6" class="empty">No se pudo cargar el inventario.</td></tr>';
+        }
+      })();
+    })();
+  </script>
+</body>
+</html>

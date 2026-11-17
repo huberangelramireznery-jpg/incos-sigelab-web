@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Panel general · SIGELAB-INCOS</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <header id="topbar"></header>
+
+  <main class="container">
+    <div id="siaStatus" class="status-strip"><span class="dot"></span><span>Consultando estado del núcleo…</span></div>
+
+    <div class="page-head">
+      <div>
+        <h1>Panel general</h1>
+        <p class="sub">Resumen de ambientes y equipos de laboratorio.</p>
+      </div>
+      <div class="row" id="acciones"></div>
+    </div>
+
+    <div id="alerta"></div>
+
+    <section class="grid grid-4 mb-3" id="stats">
+      <div class="stat"><div class="label">Equipos</div><div class="value">—</div></div>
+      <div class="stat ok"><div class="label">Operativos</div><div class="value">—</div></div>
+      <div class="stat warn"><div class="label">En mantenimiento</div><div class="value">—</div></div>
+      <div class="stat danger"><div class="label">De baja</div><div class="value">—</div></div>
+    </section>
+
+    <div class="page-head">
+      <div>
+        <h2 style="margin:0;font-size:1.15rem">Ambientes</h2>
+        <p class="sub">Haga clic en un ambiente para ver su inventario.</p>
+      </div>
+      <a class="btn btn-outline btn-sm" href="/inventario.html">Ver todo el inventario</a>
+    </div>
+
+    <section class="grid grid-3" id="ambientes">
+      <div class="card muted">Cargando ambientes…</div>
+    </section>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    (function () {
+      proteger();
+      montarNavegacion('dashboard');
+      montarEstadoSia();
+
+      const permisos = API.permisos() || {};
+      const usuario = API.usuario() || {};
+
+      const acciones = document.getElementById('acciones');
+      if (permisos.canManage) {
+        acciones.innerHTML =
+          '<a class="btn btn-primary" href="/equipos.html">+ Registrar equipo</a>' +
+          '<a class="btn btn-outline" href="/ambientes.html">Gestionar ambientes</a>';
+      } else {
+        acciones.innerHTML =
+          '<span class="badge badge-info">' + (permisos.canChangeState ? 'Puede cambiar estados' : 'Solo lectura') + '</span>';
+      }
+
+      function tarjetaAmbiente(a) {
+        const activo = a.activo === false ? ' <span class="badge badge-danger">INACTIVO</span>' : '';
+        return (
+          '<a class="card ambiente-card" href="/inventario.html?ambiente_id=' + a.id + '" style="color:inherit;text-decoration:none">' +
+          '<div class="cod">' + esc(a.codigo) + activo + '</div>' +
+          '<h3>' + esc(a.nombre) + '</h3>' +
+          '<div class="meta">' + esc(a.tipo) + ' · ' + a.total_equipos + ' equipo(s) · ' + a.equipos_activos + ' activo(s)</div>' +
+          '<div class="counts">' +
+          '<span class="badge badge-ok">OPERATIVO ' + a.por_estado.OPERATIVO + '</span>' +
+          '<span class="badge badge-warn">MANT. ' + a.por_estado.EN_MANTENIMIENTO + '</span>' +
+          '<span class="badge badge-danger">BAJA ' + a.por_estado.DE_BAJA + '</span>' +
+          '</div></a>'
+        );
+      }
+
+      async function cargar() {
+        try {
+          const d = await API.pedir('/api/dashboard');
+          const r = d.resumen_por_estado;
+
+          document.getElementById('stats').innerHTML =
+            '<div class="stat"><div class="label">Equipos</div><div class="value">' + d.total_equipos + '</div><div class="hint">' + d.total_activos + ' activos</div></div>' +
+            '<div class="stat ok"><div class="label">Operativos</div><div class="value">' + r.OPERATIVO + '</div><div class="hint">listos para uso</div></div>' +
+            '<div class="stat warn"><div class="label">En mantenimiento</div><div class="value">' + r.EN_MANTENIMIENTO + '</div><div class="hint">requieren revisión</div></div>' +
+            '<div class="stat danger"><div class="label">De baja</div><div class="value">' + r.DE_BAJA + '</div><div class="hint">fuera de servicio</div></div>';
+
+          const cont = document.getElementById('ambientes');
+          if (!d.ambientes.length) {
+            cont.innerHTML = '<div class="card muted">No hay ambientes registrados.</div>';
+          } else {
+            cont.innerHTML = d.ambientes.map(tarjetaAmbiente).join('');
+          }
+        } catch (e) {
+          mostrarAlerta('#alerta', e.message, 'danger');
+        }
+      }
+
+      cargar();
+    })();
+  </script>
+</body>
+</html>

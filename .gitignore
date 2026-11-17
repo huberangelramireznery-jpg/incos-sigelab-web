@@ -1,0 +1,21 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno: .env se versiona SIN secretos para que el demo
+# funcione al clonar. Las credenciales reales van en serviceAccountKey.json.
+.env.local
+.env.*.local
+
+# Datos locales generados por el almacenamiento de archivos
+data/store.json
+
+# Credenciales de Firebase (nunca versionar)
+serviceAccountKey.json
+*.serviceAccount.json
+firebase-credentials.json
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
